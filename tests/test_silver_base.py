@@ -377,16 +377,17 @@ def test_identifier_lists_dedupe_on_exact_equality_only(make_bronze):
     bronze = make_bronze(
         {
             "websites": '["cityhospital.in/About", "cityhospital.in/about", "cityhospital.in/About"]',
-            "email": '["info@cityhospital.in", "Info@cityhospital.in", "info@cityhospital.in"]',
-            "phone_numbers": '["+919876543210", "+91 98765 43210", "+919876543210"]',
+            # Items formatting can't change, so only exact equality can merge them.
+            "email": '["Reception Desk", "reception desk", "Reception Desk"]',
+            "phone_numbers": '["+2382247959", "+238 2247959", "+2382247959"]',
         }
     )
 
     row = build_silver_base(bronze).first()
 
     assert row.websites == ["cityhospital.in/About", "cityhospital.in/about"]
-    assert row.email == ["info@cityhospital.in", "Info@cityhospital.in"]
-    assert row.phone_numbers == ["+919876543210", "+91 98765 43210"]
+    assert row.email == ["Reception Desk", "reception desk"]
+    assert row.phone_numbers == ["+2382247959", "+238 2247959"]
 
 
 def test_source_urls_are_kept_as_captured_apart_from_exact_duplicates(make_bronze):
@@ -448,3 +449,95 @@ def test_flag_columns_have_their_types(make_bronze):
 
     types = {f.name: f.dataType.simpleString() for f in silver.schema.fields}
     assert (types["needs_investigation"], types["truncated_columns"]) == ("boolean", "array<string>")
+
+
+# Formatting (spec #1, "Formatting"): contact and location fields.
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("201 301", "201301"),
+        ("560-001", "560001"),
+        ("682016", "682016"),
+        ("COCHIN-16", "COCHIN-16"),
+        ("12 34", "12 34"),
+    ],
+)
+def test_pins_with_spaces_or_hyphens_become_six_digits_and_others_are_unchanged(make_bronze, raw, expected):
+    row = build_silver_base(make_bronze({"address_zipOrPostcode": raw})).first()
+
+    assert row.address_pincode == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("+91 98765 43210", "+919876543210"),
+        ("91-98765-43210", "+919876543210"),
+        ("9876543210", "+919876543210"),
+        ("(022) 2345 6789", "(022) 2345 6789"),
+        ("+91 1800 123 4567", "+9118001234567"),
+        ("91 1860 500 1066", "+9118605001066"),
+        ("+2382247959", "+2382247959"),
+        ("12345", "12345"),
+    ],
+)
+def test_phones_become_plus_91_and_ten_digits_and_others_are_unchanged(make_bronze, raw, expected):
+    bronze = make_bronze({"officialPhone": raw, "phone_numbers": f'["{raw}"]'})
+
+    row = build_silver_base(bronze).first()
+
+    assert (row.official_phone, row.phone_numbers) == (expected, [expected])
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Info@CityHospital.in", "info@cityhospital.in"),
+        ("info[at]cityhospital[dot]in", "info@cityhospital.in"),
+        ("OPD (at) cityhospital (dot) co.in", "opd@cityhospital.co.in"),
+        ("care at cityhospital.org", "care@cityhospital.org"),
+        ("Contact Reception", "Contact Reception"),
+        ("Info[at]CityHospital", "Info[at]CityHospital"),
+    ],
+)
+def test_emails_are_lower_cased_and_decoded_when_the_result_is_an_address(make_bronze, raw, expected):
+    row = build_silver_base(make_bronze({"email": f'["{raw}"]'})).first()
+
+    assert row.email == [expected]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("https://www.CityHospital.IN/", "cityhospital.in"),
+        ("http://CityHospital.in/Departments/Cardiology/", "cityhospital.in/Departments/Cardiology"),
+        ("WWW.Apollo.com/Find-A-Doctor?City=Pune", "apollo.com/Find-A-Doctor?City=Pune"),
+        ("https://www.facebook.com/CityHospitalPune/", "facebook.com/CityHospitalPune"),
+        ("infomedanta.org", "infomedanta.org"),
+        ("Not Available Online", "Not Available Online"),
+    ],
+)
+def test_urls_get_a_lower_case_host_without_scheme_www_or_trailing_slash(make_bronze, raw, expected):
+    bronze = make_bronze({"officialWebsite": raw, "websites": f'["{raw}"]', "facebookLink": raw})
+
+    row = build_silver_base(bronze).first()
+
+    assert (row.official_website, row.websites, row.facebook_link) == (expected, [expected], expected)
+
+
+def test_format_only_variants_collapse_to_one_item(make_bronze):
+    bronze = make_bronze(
+        {
+            "phone_numbers": '["+91 98765 43210", "098765 43210", "9876543210", "91-98765-43210"]',
+            "websites": '["https://www.CityHospital.in/", "cityhospital.in", "http://cityhospital.in/About"]',
+            "email": '["Info@CityHospital.in", "info[at]cityhospital[dot]in"]',
+        }
+    )
+
+    row = build_silver_base(bronze).first()
+
+    assert row.phone_numbers == ["+919876543210", "098765 43210"]
+    assert row.websites == ["cityhospital.in", "cityhospital.in/About"]
+    assert row.email == ["info@cityhospital.in"]
