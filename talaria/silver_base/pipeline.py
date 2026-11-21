@@ -5,7 +5,7 @@ built are marked `TODO(#n)` with the ticket that adds them; slot each new step
 in at its marker as a private `_step` function that takes and returns a DataFrame.
 """
 
-from pyspark.sql import DataFrame
+from pyspark.sql import Column, DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
 
@@ -49,6 +49,20 @@ _LIST_COLUMNS = [
 ]
 
 
+# Spec #1, "Types": bronze text columns converted to these types (named before renaming).
+# `latitude` and `longitude` are already double; the PIN, official phone and
+# `recency_of_page_update` stay text.
+_TYPES = {
+    "yearEstablished": "int",
+    "numberDoctors": "int",
+    "capacity": "int",
+    "distinct_social_media_presence_count": "int",
+    "number_of_facts_about_the_organization": "int",
+    "area": "double",
+    "affiliated_staff_presence": "boolean",
+}
+
+
 # Spec #1, "Renames to snake_case". Columns not listed keep their names.
 _RENAMES = {
     "officialPhone": "official_phone",
@@ -80,8 +94,10 @@ def build_silver_base(bronze: DataFrame) -> DataFrame:
     df = _normalize_text_columns(df)
     # 5. TODO(#4): parse lists. TODO(#5, #6): Spelling fixes and formatting of values
     #    and list items. TODO(#4): remove empty and Duplicate items; empty list -> NULL.
-    # 6. TODO(#7): zero-doctors and zero-beds rules, repeated address line, date rewrite.
-    # 7. TODO(#7): convert types. Then rename columns.
+    # 6. Zero-doctors and zero-beds rules, repeated address line, date rewrite.
+    df = _apply_value_rules(df)
+    # 7. Convert types, then rename columns.
+    df = _convert_types(df)
     df = _rename_columns(df)
     _check_unique_id(df)
     return df
@@ -113,6 +129,62 @@ def _normalize_text_columns(df: DataFrame) -> DataFrame:
             for name in text_columns
         }
     )
+
+
+def _apply_value_rules(df: DataFrame) -> DataFrame:
+    """Spec #1, "Other rules". Runs on text, before types are converted."""
+    doctors = F.expr("try_cast(numberDoctors AS int)")
+    beds = F.expr("try_cast(capacity AS int)")
+    return df.withColumns(
+        {
+            # An unrecorded count, not a Facility with no doctors.
+            "numberDoctors": F.when(doctors == 0, F.lit(None).cast("string")).otherwise(F.col("numberDoctors")),
+            # 0 beds is kept; Silver facilities decides whether it is real.
+            "flag_zero_beds": F.coalesce(beds == 0, F.lit(False)),
+            # Both lines are already whitespace-normalized (step 4).
+            "address_line3": F.when(
+                F.col("address_line3") == F.col("address_line2"), F.lit(None).cast("string")
+            ).otherwise(F.col("address_line3")),
+            "recency_of_page_update": _month_year_to_iso(F.col("recency_of_page_update")),
+        }
+    )
+
+
+_MONTHS = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december",
+]
+_MONTH_YEAR = rf"^({'|'.join(_MONTHS)}) ([0-9]{{4}})$"
+
+
+def _month_year_to_iso(col: Column) -> Column:
+    """`October 2025` -> `2025-10-01`, still text. Anything else (`3 weeks ago`) is unchanged."""
+    lowered = F.lower(col)
+    month_numbers = F.create_map(*[F.lit(x) for i, name in enumerate(_MONTHS, 1) for x in (name, f"{i:02d}")])
+    iso = F.concat_ws(
+        "-",
+        F.regexp_extract(lowered, _MONTH_YEAR, 2),
+        month_numbers[F.regexp_extract(lowered, _MONTH_YEAR, 1)],
+        F.lit("01"),
+    )
+    return F.when(lowered.rlike(_MONTH_YEAR), iso).otherwise(col)
+
+
+def _convert_types(df: DataFrame) -> DataFrame:
+    """Spec #1, "Types". Raises ValueError if any non-missing value fails to convert.
+
+    Missing values are already NULL (step 4), so a NULL after conversion from a
+    non-NULL value is a failure, never silently dropped.
+    """
+    converted = {name: F.expr(f"try_cast(`{name}` AS {type_})") for name, type_ in _TYPES.items()}
+    failures = df.agg(
+        *[F.count(F.when(F.col(name).isNotNull() & cast.isNull(), 1)).alias(name) for name, cast in converted.items()]
+    ).first()
+    failed = {name: n for name, n in failures.asDict().items() if n}
+    if failed:
+        detail = ", ".join(f"{name} ({n} value(s) not {_TYPES[name]})" for name, n in failed.items())
+        raise ValueError(f"values failed to convert: {detail}")
+    return df.withColumns(converted)
 
 
 def _rename_columns(df: DataFrame) -> DataFrame:
