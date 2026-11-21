@@ -348,7 +348,7 @@ def test_duplicate_items_collapse_to_the_first_spelling_in_order(make_bronze):
                 '"Laparoscopic-Surgery", "dialysis.", "Cataract Surgery", "cataract surgerys"]'
             ),
             "equipment": '["MRI Scanner", "MRI scanners", "X-ray", "xray"]',
-            "affiliationTypeIds": '["private-entity", "Private Entity", "NAAC"]',
+            "affiliationTypeIds": '["faith-tradition", "Faith Tradition", "academic"]',
         }
     )
 
@@ -356,7 +356,7 @@ def test_duplicate_items_collapse_to_the_first_spelling_in_order(make_bronze):
 
     assert row.procedure == ["Laparoscopic Surgery", "Dialysis", "Cataract Surgery"]
     assert row.equipment == ["MRI Scanner", "X-ray"]
-    assert row.affiliation_types == ["private-entity", "NAAC"]
+    assert row.affiliation_types == ["faith-tradition", "academic"]
 
 
 def test_items_differing_by_real_letters_stay_separate(make_bronze):
@@ -448,3 +448,87 @@ def test_flag_columns_have_their_types(make_bronze):
 
     types = {f.name: f.dataType.simpleString() for f in silver.schema.fields}
     assert (types["needs_investigation"], types["truncated_columns"]) == ("boolean", "array<string>")
+
+
+def test_facility_type_is_lower_cased_and_farmacy_becomes_pharmacy(make_bronze):
+    bronze = make_bronze({"facilityTypeId": "farmacy"}, {"facilityTypeId": "Hospital"}, {"facilityTypeId": "kie"})
+
+    types = [row.facility_type for row in build_silver_base(bronze).orderBy("unique_id").collect()]
+
+    assert types == ["pharmacy", "hospital", "kie"]
+
+
+def test_operator_type_is_lower_cased_and_government_becomes_public(make_bronze):
+    bronze = make_bronze({"operatorTypeId": "government"}, {"operatorTypeId": "Private"}, {"operatorTypeId": "kie"})
+
+    operators = [row.operator_type for row in build_silver_base(bronze).orderBy("unique_id").collect()]
+
+    assert operators == ["public", "private", "kie"]
+
+
+def test_affiliation_types_are_lower_cased_with_spelling_fixes_and_invalid_values_kept(make_bronze):
+    bronze = make_bronze({"affiliationTypeIds": '["Private-Entity", "academic", "NAAC", "DCI", "private"]'})
+
+    row = build_silver_base(bronze).first()
+
+    assert row.affiliation_types == ["private", "academic", "naac", "dci"]
+
+
+def _states(make_bronze, raw_states):
+    bronze = make_bronze(*[{"unique_id": f"f{i:02d}", "address_stateOrRegion": s} for i, s in enumerate(raw_states)])
+    return [row.address_state for row in build_silver_base(bronze).orderBy("unique_id").collect()]
+
+
+def test_state_typos_abbreviations_and_old_names_become_the_official_name(make_bronze):
+    raw = ["Tamilnadu", "U.p.", "Orissa", "Nct Of Delhi", "Uttranchal", "Uttar Prades H", "Ms", "kerala"]
+
+    assert _states(make_bronze, raw) == [
+        "Tamil Nadu", "Uttar Pradesh", "Odisha", "Delhi", "Uttarakhand", "Uttar Pradesh", "Maharashtra", "Kerala",
+    ]
+
+
+def test_a_state_after_the_last_comma_becomes_the_state(make_bronze):
+    raw = ["Gurugram, Haryana", "Satara District, Maharashtra", "Jammu, J&k", "Pallikulam, Kannur District, Kerala"]
+
+    assert _states(make_bronze, raw) == ["Haryana", "Maharashtra", "Jammu And Kashmir", "Kerala"]
+
+
+def test_cities_and_ambiguous_values_in_the_state_field_are_unchanged(make_bronze):
+    raw = ["Thane", "Mumbai", "Punjab Region", "Kashmir", "Ut", "Madhya", "Tamil Nadu; Karnataka", "Kerala, Thrissur"]
+
+    assert _states(make_bronze, raw) == raw
+
+
+def test_city_is_title_cased_and_old_names_become_current_ones(make_bronze):
+    raw = ["Bangalore", "GURGAON", "bombay", "navi mumbai", "Trivandrum", "Pune"]
+    bronze = make_bronze(*[{"unique_id": f"f{i}", "address_city": c} for i, c in enumerate(raw)])
+
+    cities = [row.address_city for row in build_silver_base(bronze).orderBy("unique_id").collect()]
+
+    assert cities == ["Bengaluru", "Gurugram", "Mumbai", "Navi Mumbai", "Thiruvananthapuram", "Pune"]
+
+
+def test_british_specialty_spellings_become_american_keeping_their_case_shape(make_bronze):
+    bronze = make_bronze(
+        {
+            "specialties": (
+                '["paediatricCardiology", "clinicalHaematology", "orthopaedicSurgery", "obstetricsAndGynaecology", '
+                '"neuroAnaesthesiology", "Oesophageal Surgery", "lymphoedema", "PAEDIATRICS & NEONATOLOGY"]'
+            )
+        }
+    )
+
+    row = build_silver_base(bronze).first()
+
+    assert row.specialties == [
+        "pediatricCardiology", "clinicalHematology", "orthopedicSurgery", "obstetricsAndGynecology",
+        "neuroAnesthesiology", "Esophageal Surgery", "lymphedema", "PEDIATRICS & NEONATOLOGY",
+    ]
+
+
+def test_specialty_spelling_fixes_run_before_duplicate_removal(make_bronze):
+    bronze = make_bronze({"specialties": '["pediatricSurgery", "paediatricSurgery", "Haematology", "hematology"]'})
+
+    row = build_silver_base(bronze).first()
+
+    assert row.specialties == ["pediatricSurgery", "Hematology"]
