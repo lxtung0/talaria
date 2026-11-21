@@ -62,7 +62,7 @@ def test_output_columns_follow_the_rename_table(make_bronze):
         "distinct_social_media_presence_count", "affiliated_staff_presence",
         "number_of_facts_about_the_organization", "latitude", "longitude",
         "cluster_id", "source_urls", "_source_table", "_ingested_at",
-        "needs_investigation", "truncated_columns",
+        "needs_investigation", "truncated_columns", "flag_zero_beds",
     ]
 
 
@@ -71,7 +71,7 @@ def test_renamed_columns_keep_their_values(make_bronze):
 
     row = build_silver_base(bronze).first()
 
-    assert (row.bed_count, row.address_state) == ("120", "Kerala")
+    assert (row.bed_count, row.address_state) == (120, "Kerala")
 
 
 def test_raises_when_unique_id_repeats_after_cleanup(make_bronze):
@@ -160,6 +160,120 @@ def test_a_list_with_a_placeholder_item_keeps_its_other_items(make_bronze):
 
     assert row.email is not None
     assert "info@cityhospital.in" in str(row.email)
+
+
+def test_zero_doctors_becomes_null_and_the_facility_is_kept(make_bronze):
+    bronze = make_bronze({"unique_id": "zero", "numberDoctors": "0"}, {"unique_id": "some", "numberDoctors": "12"})
+
+    rows = build_silver_base(bronze).orderBy("unique_id").collect()
+
+    assert [(row.unique_id, row.number_doctors) for row in rows] == [("some", 12), ("zero", None)]
+
+
+def test_zero_beds_are_kept_and_flagged(make_bronze):
+    bronze = make_bronze(
+        {"unique_id": "a-zero", "capacity": "0"},
+        {"unique_id": "b-some", "capacity": "40"},
+        {"unique_id": "c-unknown", "capacity": None},
+    )
+
+    rows = build_silver_base(bronze).orderBy("unique_id").collect()
+
+    assert [(row.bed_count, row.flag_zero_beds) for row in rows] == [(0, True), (40, False), (None, False)]
+
+
+def test_address_line3_repeating_line2_after_whitespace_normalization_becomes_null(make_bronze):
+    bronze = make_bronze(
+        {"unique_id": "a-repeat", "address_line2": "Near Bus Stand", "address_line3": " Near  Bus Stand "},
+        {"unique_id": "b-distinct", "address_line2": "Near Bus Stand", "address_line3": "Kothrud"},
+    )
+
+    rows = build_silver_base(bronze).orderBy("unique_id").collect()
+
+    assert [(row.address_line2, row.address_line3) for row in rows] == [
+        ("Near Bus Stand", None),
+        ("Near Bus Stand", "Kothrud"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("October 2025", "2025-10-01"),
+        ("January 2019", "2019-01-01"),
+        ("3 weeks ago", "3 weeks ago"),
+        ("2 months ago", "2 months ago"),
+    ],
+)
+def test_month_year_page_updates_become_iso_dates_and_others_are_unchanged(make_bronze, raw, expected):
+    silver = build_silver_base(make_bronze({"recency_of_page_update": raw}))
+
+    assert silver.first().recency_of_page_update == expected
+    assert silver.schema["recency_of_page_update"].dataType.simpleString() == "string"
+
+
+def test_numeric_and_boolean_columns_are_converted_and_text_columns_stay_text(make_bronze):
+    bronze = make_bronze(
+        {
+            "yearEstablished": "1998",
+            "numberDoctors": "25",
+            "capacity": "120",
+            "distinct_social_media_presence_count": "3",
+            "number_of_facts_about_the_organization": "7",
+            "area": "1500.5",
+            "affiliated_staff_presence": "true",
+            "recency_of_page_update": "October 2025",
+            "address_zipOrPostcode": "411038",
+            "officialPhone": "+919876543210",
+            "latitude": 18.52,
+            "longitude": 73.85,
+        }
+    )
+
+    silver = build_silver_base(bronze)
+
+    types = {f.name: f.dataType.simpleString() for f in silver.schema.fields}
+    assert {name: types[name] for name in [
+        "year_established", "number_doctors", "bed_count",
+        "distinct_social_media_presence_count", "number_of_facts_about_the_organization",
+        "area", "affiliated_staff_presence", "flag_zero_beds", "latitude", "longitude",
+        "recency_of_page_update", "address_pincode", "official_phone",
+    ]} == {
+        "year_established": "int", "number_doctors": "int", "bed_count": "int",
+        "distinct_social_media_presence_count": "int", "number_of_facts_about_the_organization": "int",
+        "area": "double", "affiliated_staff_presence": "boolean", "flag_zero_beds": "boolean",
+        "latitude": "double", "longitude": "double",
+        "recency_of_page_update": "string", "address_pincode": "string", "official_phone": "string",
+    }
+    row = silver.first()
+    assert (row.year_established, row.number_doctors, row.bed_count, row.area, row.affiliated_staff_presence) == (
+        1998, 25, 120, 1500.5, True,
+    )
+
+
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [
+        ("yearEstablished", "around 1998"),
+        ("numberDoctors", "twenty"),
+        ("capacity", "120 beds"),
+        ("area", "1500 sq ft"),
+        ("affiliated_staff_presence", "maybe"),
+    ],
+)
+def test_a_value_that_fails_to_convert_raises(make_bronze, column, value):
+    bronze = make_bronze({column: value})
+
+    with pytest.raises(ValueError, match=column):
+        build_silver_base(bronze)
+
+
+def test_missing_values_in_typed_columns_become_null_without_raising(make_bronze):
+    bronze = make_bronze({"yearEstablished": "null", "area": "", "affiliated_staff_presence": None})
+
+    row = build_silver_base(bronze).first()
+
+    assert (row.year_established, row.area, row.affiliated_staff_presence) == (None, None, None)
 
 
 LIST_COLUMNS = [
