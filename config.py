@@ -4,7 +4,7 @@ Import this from any notebook so table names live in one place:
 
     import sys, os
     sys.path.insert(0, os.path.abspath(".."))  # from notebooks/
-    from config import SOURCE, BRONZE, SILVER, GOLD, OUTPUT_CATALOG, OUTPUT_SCHEMA
+    from config import SOURCE, BRONZE, SILVER_BASE, SILVER, GOLD, OUTPUT_CATALOG, OUTPUT_SCHEMA
 """
 
 # Source: the Virtue Foundation datathon dataset (read-only, Unity Catalog)
@@ -29,4 +29,7 @@ def _out(layer: str, name: str) -> str:
 
 BRONZE = {name: _out("bronze", name) for name in SOURCE}
 SILVER = {name: _out("silver", name) for name in SOURCE}
+# Silver base: the first Silver stage (objective fixes only). SILVER["facilities"]
+# stays reserved for the final Silver facilities stage, which reads from this.
+SILVER_BASE = {"facilities": _out("silver", "facilities_base")}
 GOLD = {}  # add gold tables here as the analysis takes shape, e.g. GOLD["facilities_by_district"] = _out("gold", "facilities_by_district")

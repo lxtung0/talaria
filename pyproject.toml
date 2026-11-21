@@ -1,0 +1,21 @@
+[project]
+name = "talaria"
+version = "0.1.0"
+description = "Cleaning and evaluating the Virtue Foundation healthcare facilities dataset on Databricks."
+requires-python = ">=3.11,<3.13"
+# No runtime dependencies: Databricks provides pyspark on the cluster.
+dependencies = []
+
+[dependency-groups]
+# Local development only: a laptop Spark session for the unit tests.
+dev = [
+    "pyspark==3.5.*",
+    "pytest>=8",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

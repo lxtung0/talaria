@@ -22,6 +22,23 @@ All table names live in [`config.py`](config.py). Notebooks import from it inste
 
 Run notebooks in order: `01_bronze_ingest` → silver cleaning → gold.
 
+## Code
+
+- `talaria/silver_base/`: the Silver base cleaning module. Its one public entry point is `build_silver_base(bronze_df) -> silver_base_df`; it does no reads or writes, so it runs on any Spark session.
+- `tests/`: pytest tests that run against a local Spark session, no Databricks needed. `tests/conftest.py` has the `spark` fixture and `make_bronze`, which builds a small fake bronze facilities DataFrame from partial rows.
+
+## Running tests locally
+
+Needs [`uv`](https://docs.astral.sh/uv/) and a JDK 17 (Spark 3.5 runs on the JVM).
+
+```sh
+uv sync                                         # creates .venv with pyspark + pytest (dev group)
+export JAVA_HOME=$(/usr/libexec/java_home -v 17) # macOS; elsewhere point JAVA_HOME at a JDK 17
+uv run pytest
+```
+
+Test only through `build_silver_base`: build a fake bronze DataFrame with `make_bronze`, run the function, check the output rows and columns.
+
 ## Working in Databricks
 
 1. Link GitHub: profile icon → Settings → Linked accounts → GitHub.
