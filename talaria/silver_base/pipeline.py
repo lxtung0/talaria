@@ -7,6 +7,9 @@ in at its marker as a private `_step` function that takes and returns a DataFram
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
+from pyspark.sql import types as T
+
+from talaria.silver_base.text import clean_text
 
 # Spec #1, "Columns dropped (16)".
 _DROPPED_COLUMNS = [
@@ -29,6 +32,20 @@ _DROPPED_COLUMNS = [
     # Unused source bookkeeping.
     "source_types",
     "source_ids",
+]
+
+
+# Spec #1, "List columns": JSON-array text in bronze.
+_LIST_COLUMNS = [
+    "specialties",
+    "procedure",
+    "equipment",
+    "capability",
+    "phone_numbers",
+    "websites",
+    "source_urls",
+    "affiliationTypeIds",
+    "email",
 ]
 
 
@@ -59,7 +76,8 @@ def build_silver_base(bronze: DataFrame) -> DataFrame:
     # 2. TODO(#4): record original list lengths; set needs_investigation, truncated_columns.
     # 3. Drop columns.
     df = _drop_unused_columns(df)
-    # 4. TODO(#3): normalize whitespace, then Missing values.
+    # 4. Normalize whitespace, then Missing values.
+    df = _normalize_text_columns(df)
     # 5. TODO(#4): parse lists. TODO(#5, #6): Spelling fixes and formatting of values
     #    and list items. TODO(#4): remove empty and Duplicate items; empty list -> NULL.
     # 6. TODO(#7): zero-doctors and zero-beds rules, repeated address line, date rewrite.
@@ -80,6 +98,21 @@ def _collapse_exact_duplicates(df: DataFrame) -> DataFrame:
 
 def _drop_unused_columns(df: DataFrame) -> DataFrame:
     return df.drop(*_DROPPED_COLUMNS)
+
+
+def _normalize_text_columns(df: DataFrame) -> DataFrame:
+    """Whitespace, then Missing values, on every string column's raw text.
+
+    In list columns a value merely containing the hidden-email placeholder is not
+    Missing as a whole (its other items may be real); #4 applies the full rule per item.
+    """
+    text_columns = [f.name for f in df.schema.fields if isinstance(f.dataType, T.StringType)]
+    return df.withColumns(
+        {
+            name: clean_text(F.col(name), placeholder_anywhere=name not in _LIST_COLUMNS)
+            for name in text_columns
+        }
+    )
 
 
 def _rename_columns(df: DataFrame) -> DataFrame:

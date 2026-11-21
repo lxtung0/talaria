@@ -88,3 +88,74 @@ def test_raises_when_unique_id_is_null_after_cleanup(make_bronze):
 
     with pytest.raises(ValueError, match="unique_id"):
         build_silver_base(bronze)
+
+
+def test_whitespace_of_every_kind_is_trimmed_from_both_ends(make_bronze):
+    bronze = make_bronze(
+        {"address_city": " ​ Pune\t\n﻿"},
+        {"address_city": "\u2007\u202fKochi\u00a0"},
+    )
+
+    cities = [row.address_city for row in build_silver_base(bronze).orderBy("unique_id").collect()]
+
+    assert cities == ["Pune", "Kochi"]
+
+
+def test_inner_runs_of_whitespace_collapse_to_one_space(make_bronze):
+    bronze = make_bronze({"address_line1": "12  MG\u00a0\u00a0Road,\t\nNear\u200bBus  Stand"})
+
+    row = build_silver_base(bronze).first()
+
+    assert row.address_line1 == "12 MG Road, Near Bus Stand"
+
+
+def test_name_and_description_get_whitespace_normalization_only(make_bronze):
+    bronze = make_bronze(
+        {"name": "  AIIMS   **Rishikesh**\u00a0", "description": "Est. 2012 [1]:\n\n  *24x7* ICU  "}
+    )
+
+    row = build_silver_base(bronze).first()
+
+    assert (row.name, row.description) == ("AIIMS **Rishikesh**", "Est. 2012 [1]: *24x7* ICU")
+
+
+@pytest.mark.parametrize("missing", ["null", "NULL", "Null", "", "[]", "  null\u00a0", "\u200b"])
+def test_missing_value_spellings_become_null(make_bronze, missing):
+    bronze = make_bronze({"address_city": missing, "officialPhone": missing, "description": missing})
+
+    row = build_silver_base(bronze).first()
+
+    assert (row.address_city, row.official_phone, row.description) == (None, None, None)
+
+
+def test_a_value_containing_the_hidden_email_placeholder_becomes_null(make_bronze):
+    bronze = make_bronze({"officialWebsite": "[email\u00a0protected]"}, {"officialWebsite": "Contact: [email protected]"})
+
+    websites = [row.official_website for row in build_silver_base(bronze).collect()]
+
+    assert websites == [None, None]
+
+
+def test_real_values_resembling_missing_spellings_are_kept(make_bronze):
+    bronze = make_bronze({"name": "Nullah Bazar Clinic", "address_line2": "[1] Main Road"})
+
+    row = build_silver_base(bronze).first()
+
+    assert (row.name, row.address_line2) == ("Nullah Bazar Clinic", "[1] Main Road")
+
+
+def test_an_empty_list_column_becomes_null(make_bronze):
+    bronze = make_bronze({"specialties": " [] ", "phone_numbers": "NULL"})
+
+    row = build_silver_base(bronze).first()
+
+    assert (row.specialties, row.phone_numbers) == (None, None)
+
+
+def test_a_list_with_a_placeholder_item_keeps_its_other_items(make_bronze):
+    bronze = make_bronze({"email": '["[email protected]", "info@cityhospital.in"]'})
+
+    row = build_silver_base(bronze).first()
+
+    assert row.email is not None
+    assert "info@cityhospital.in" in str(row.email)
