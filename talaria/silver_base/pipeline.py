@@ -11,7 +11,7 @@ from pyspark.sql import Column, DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
 
-from talaria.silver_base import spelling
+from talaria.silver_base import formatting, spelling
 from talaria.silver_base.text import clean_text
 
 # Spec #1, "Columns dropped (16)".
@@ -206,8 +206,6 @@ def _fix_and_format_values(df: DataFrame) -> DataFrame:
 
 
 # Per-column Spelling fix / formatting rules, keyed by bronze column name.
-# TODO(#6): formatting (officialPhone, phone_numbers, email, officialWebsite,
-#   websites, facebookLink, address_zipOrPostcode). source_urls is never formatted.
 _FIX_AND_FORMAT_RULES: dict[str, Callable[[Column], Column]] = {
     # Spelling fixes (#5).
     "facilityTypeId": spelling.facility_type,
@@ -216,6 +214,14 @@ _FIX_AND_FORMAT_RULES: dict[str, Callable[[Column], Column]] = {
     "address_stateOrRegion": spelling.state,
     "address_city": spelling.city,
     "specialties": spelling.specialty,
+    # Formatting (#6). source_urls is never formatted: citations stay as captured.
+    "address_zipOrPostcode": formatting.format_pin,
+    "officialPhone": formatting.format_phone,
+    "phone_numbers": formatting.format_phone,
+    "email": formatting.format_email,
+    "officialWebsite": formatting.format_url,
+    "websites": formatting.format_url,
+    "facebookLink": formatting.format_url,
 }
 
 
