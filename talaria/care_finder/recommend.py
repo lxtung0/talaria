@@ -169,6 +169,7 @@ def build_result(facility: dict, hits: list[dict], place: Place, urgency: str, s
     evidence = scoring.service_evidence(hits, settings)
     confidence = facility.get("confidence_score")
     confidence = 0.5 if confidence is None else float(confidence)
+    open_24_7_quote = facility.get("open_24_7_quote")
     counted = {h["item_id"] for h in scoring.counted_hits(hits, settings)}
     ordered = sorted(hits, key=lambda h: (-scoring.hit_value(h["label"], h["item_type"], settings), -h["similarity"]))
     return {
@@ -189,7 +190,9 @@ def build_result(facility: dict, hits: list[dict], place: Place, urgency: str, s
         "confidence_band": scoring.confidence_band(confidence, settings),
         "confidence_reasons": facility.get("confidence_reasons") or [],
         "distance_factor": round(scoring.distance_decay(distance, urgency, settings), 3),
-        "rank": round(scoring.rank_score(evidence, confidence, distance, urgency, settings), 4),
+        "open_24_7_quote": open_24_7_quote,
+        "open_24_7_factor": scoring.open_24_7_factor(bool(open_24_7_quote), urgency, settings),
+        "rank": round(scoring.rank_score(evidence, confidence, distance, urgency, settings, bool(open_24_7_quote)), 4),
         "evidence": [
             {
                 "item_id": h["item_id"],

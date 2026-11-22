@@ -52,7 +52,12 @@ def test_noisy_or_of_nothing_is_zero():
 
 def test_rank_is_evidence_times_confidence_factor_times_distance_decay():
     assert scoring.rank_score(0.8, 0.5, 50, "planned") == pytest.approx(0.8 * 0.75 * math.exp(-50 / 100))
-    assert scoring.rank_score(0.8, 0.5, 50, "emergency") == pytest.approx(0.8 * 0.75 * math.exp(-50 / 25))
+    assert scoring.rank_score(0.8, 0.5, 50, "emergency") == pytest.approx(0.8 * 0.75 * math.exp(-50 / 25) * 0.85)
+
+
+def test_an_emergency_rank_has_a_24_7_factor_and_a_planned_one_does_not():
+    assert scoring.rank_score(0.8, 0.5, 50, "emergency", open_24_7=True) == pytest.approx(0.8 * 0.75 * math.exp(-50 / 25))
+    assert scoring.rank_score(0.8, 0.5, 50, "planned", open_24_7=True) == scoring.rank_score(0.8, 0.5, 50, "planned")
 
 
 def test_haversine_patna_to_lucknow_is_about_470_km():

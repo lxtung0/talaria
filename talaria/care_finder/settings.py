@@ -39,6 +39,9 @@ class Settings:
     )
     hits_per_type: int = 2  # only the best this many hits of each type count
     distance_decay_km: dict = field(default_factory=lambda: {"emergency": 25.0, "planned": 100.0})
+    # Emergency only: a Facility with no 24/7 claim keeps 1 − this of its rank. Kept
+    # smaller than the confidence factor's 0.5, so evidence and distance weigh most.
+    emergency_24_7_weight: float = 0.15
 
     # Bands.
     evidence_bands: tuple = (("strong", 0.75), ("some", 0.5))  # above 0 otherwise: "mention only"

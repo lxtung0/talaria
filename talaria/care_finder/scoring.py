@@ -50,8 +50,23 @@ def distance_decay(distance_km: float, urgency: str, settings: Settings = DEFAUL
     return math.exp(-distance_km / d0)
 
 
-def rank_score(evidence: float, confidence: float, distance_km: float, urgency: str, settings: Settings = DEFAULT) -> float:
-    return evidence * (0.5 + 0.5 * confidence) * distance_decay(distance_km, urgency, settings)
+def open_24_7_factor(open_24_7: bool, urgency: str, settings: Settings = DEFAULT) -> float:
+    """1 for planned care; for an emergency, 1 if the Facility says it is open 24/7, else 1 − weight."""
+    if urgency != "emergency":
+        return 1.0
+    w = settings.emergency_24_7_weight
+    return 1.0 - w + w * open_24_7
+
+
+def rank_score(
+    evidence: float, confidence: float, distance_km: float, urgency: str, settings: Settings = DEFAULT, open_24_7: bool = False
+) -> float:
+    return (
+        evidence
+        * (0.5 + 0.5 * confidence)
+        * distance_decay(distance_km, urgency, settings)
+        * open_24_7_factor(open_24_7, urgency, settings)
+    )
 
 
 def evidence_band(evidence: float, settings: Settings = DEFAULT) -> str:
