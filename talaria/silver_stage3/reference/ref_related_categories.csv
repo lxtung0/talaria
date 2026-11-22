@@ -1,0 +1,31 @@
+category,related_category
+Obstetrics & Gynecology,Fertility / IVF
+Obstetrics & Gynecology,Neonatology / NICU
+Fertility / IVF,Obstetrics & Gynecology
+Neonatology / NICU,Obstetrics & Gynecology
+Neonatology / NICU,Pediatrics (general)
+Pediatrics (general),Neonatology / NICU
+Critical Care / ICU,Anesthesia
+Critical Care / ICU,Emergency & Trauma
+Emergency & Trauma,Critical Care / ICU
+Emergency & Trauma,Orthopedics
+Orthopedics,Emergency & Trauma
+Orthopedics,Neurology & Neurosurgery
+Orthopedics,Physical Medicine & Rehab
+Physical Medicine & Rehab,Neurology & Neurosurgery
+Physical Medicine & Rehab,Orthopedics
+Cardiology,Cardiac Surgery
+Cardiology,Critical Care / ICU
+Cardiac Surgery,Cardiology
+Nephrology & Dialysis,Transplant
+Nephrology & Dialysis,Urology
+Urology,Nephrology & Dialysis
+Endocrinology & Diabetes,Ophthalmology
+Dermatology,Burns & Plastic Surgery
+Burns & Plastic Surgery,Dermatology
+Neurology & Neurosurgery,Orthopedics
+Neurology & Neurosurgery,Psychiatry & Mental Health
+Psychiatry & Mental Health,Neurology & Neurosurgery
+Psychiatry & Mental Health,Pediatrics (general)
+Pulmonology,Critical Care / ICU
+Gastroenterology & Hepatology,General Surgery

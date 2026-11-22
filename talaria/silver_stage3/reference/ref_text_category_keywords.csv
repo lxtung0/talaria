@@ -1,0 +1,29 @@
+category,text_regex
+Nephrology & Dialysis,(?i)dialys|nephrolog|kidney|renal
+Cardiology,(?i)cardiolog|\becg\b|echocardio|\b2d echo|angiograph|angioplast|cath ?lab|pacemaker|\btmt\b|holter|coronary|heart attack
+Cardiac Surgery,(?i)cardiac surg|cardiothoracic|\bcabg\b|bypass surg|open.heart|valve (replacement|repair)|heart.?lung
+Neonatology / NICU,(?i)\bnicu\b|neonat|newborn|incubator|radiant warmer|phototherapy|premature|preterm
+Obstetrics & Gynecology,(?i)obstet|gyn(a)?ec|caesar|cesar|c-section|\blscs\b|deliver(y|ies)|labou?r room|maternity|antenatal|pregnan|hysterect|\bctg\b
+Critical Care / ICU,(?i)\bicu\b|intensive care|critical care|ventilator|\bmicu\b|\bsicu\b|\bccu\b|\biccu\b
+Emergency & Trauma,(?i)emergency|casualty|trauma|accident|ambulance|24\s*[x×/]\s*7
+Orthopedics,(?i)orthop|fracture|joint replacement|knee|hip replacement|arthroscop|spine surg|c-arm
+Neurology & Neurosurgery,(?i)neurolog|neurosurg|stroke|epilep|\beeg\b|\bemg\b|craniotom|brain
+Oncology & Hematology,(?i)oncolog|cancer|chemotherap|radiotherap|radiation therap|linac|tumou?r|hematolog|haematolog
+Ophthalmology,(?i)ophthalm|\beye\b|cataract|retina|glaucoma|lasik|phaco|cornea|slit.?lamp|squint
+ENT,(?i)\bent\b|otolaryng|\bear\b|nose|throat|tonsil|sinus|audiomet|hearing
+Dentistry & Oral Surgery,(?i)dental|dentist|tooth|teeth|root canal|orthodont|implant(s)? (dentistry|placement)|\brvg\b|\bopg\b|maxillofacial
+Gastroenterology & Hepatology,(?i)gastro|endoscop|colonoscop|\bercp\b|liver|hepat|laparoscopic cholecyst|hernia|piles
+Urology,(?i)urolog|\bturp\b|\bpcnl\b|lithotrip|prostat|kidney stone|cystoscop|ureteroscop
+Pulmonology,(?i)pulmon|bronchoscop|spiromet|asthma|\bcopd\b|lung|chest physician|sleep study
+Radiology & Imaging,(?i)x-?ray|\bct\b|\bmri\b|ultrasound|sonograph|mammograph|radiolog|doppler|pet.?ct
+Pathology & Laboratory,(?i)laborator|\blab\b|patholog|blood test|biopsy|blood bank|microbiolog
+Dermatology,(?i)dermatolog|skin|cosmetolog|hair (fall|removal|transplant)|acne|laser (hair|skin)
+Burns & Plastic Surgery,(?i)\bburns?\b|plastic surg|skin graft|reconstructive
+Fertility / IVF,(?i)\bivf\b|\biui\b|\bicsi\b|infertil|fertility|embryo
+Psychiatry & Mental Health,(?i)psychiat|psycholog|counsel|de-?addiction|mental health
+Physical Medicine & Rehab,(?i)physiotherap|rehabilit|pain management|palliative
+Endocrinology & Diabetes,(?i)diabet|endocrin|thyroid|insulin
+Pediatrics (general),(?i)paediatric|pediatric|child(ren)?|vaccinat|immuni[sz]ation
+Transplant,(?i)transplant
+AYUSH / Traditional Medicine,(?i)ayurved|panchakarma|homeopath|unani|siddha
+Anesthesia,(?i)anaesthe|anesthe

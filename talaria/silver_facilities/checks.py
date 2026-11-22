@@ -44,7 +44,7 @@ def check_silver_facilities(silver_base: DataFrame, facilities: DataFrame) -> No
     for name in location.FLAGS:
         if counts[f"out_of_scope:{name}"]:
             failures.append(f"{name}: true for {counts[f'out_of_scope:{name}']} row(s) without a Silver base location flag")
-    failures += _changed_value_failures(silver_base, facilities)
+    failures += changed_value_failures(silver_base, facilities)
     if failures:
         _fail(failures)
 
@@ -90,9 +90,14 @@ def _schema_failures(silver_base: DataFrame, facilities: DataFrame) -> list[str]
     return failures
 
 
-def _changed_value_failures(silver_base: DataFrame, facilities: DataFrame) -> list[str]:
-    """Each column's hash before and after, compared per Facility."""
-    names = [name for name in silver_base.columns if name != "unique_id"]
+def changed_value_failures(
+    silver_base: DataFrame, facilities: DataFrame, names: list[str] | None = None, label: str = "Silver base"
+) -> list[str]:
+    """Each column's hash before and after, compared per Facility.
+
+    `names` defaults to every column of `silver_base`; `label` names the input in messages.
+    """
+    names = [name for name in (names or silver_base.columns) if name != "unique_id"]
 
     def hashed(df: DataFrame, side: str) -> DataFrame:
         return df.select(
@@ -115,9 +120,9 @@ def _changed_value_failures(silver_base: DataFrame, facilities: DataFrame) -> li
         )
         .first()
     )
-    failures = [f"{name}: {counts[name]} row(s) changed from Silver base" for name in names if counts[name]]
+    failures = [f"{name}: {counts[name]} row(s) changed from {label}" for name in names if counts[name]]
     if counts["lost"] or counts["added"]:
-        failures.append(f"unique_id differs from Silver base: {counts['lost']} lost, {counts['added']} added")
+        failures.append(f"unique_id differs from {label}: {counts['lost']} lost, {counts['added']} added")
     return failures
 
 

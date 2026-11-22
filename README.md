@@ -19,7 +19,8 @@ All table names live in [`config.py`](config.py). Notebooks import from it inste
 - **Bronze**: `workspace.talaria.bronze_*`, raw snapshots of the source tables, built by `notebooks/01_bronze_ingest`
 - **Silver**: `workspace.talaria.silver_*`, cleaned, typed, de-duplicated
   - **Silver base**: `workspace.talaria.silver_facilities_base`, objective fixes only, built by `notebooks/02_silver_base`
-  - **Silver facilities**: `workspace.talaria.silver_facilities`, the final Silver stage, Silver base plus flag columns, built by `notebooks/03_silver_facilities`
+  - **Silver facilities**: `workspace.talaria.silver_facilities`, Silver base plus flag columns, built by `notebooks/03_silver_facilities`
+  - **Silver Stage 3**: `workspace.talaria.silver_facilities_stage3`, Silver facilities plus capacity, large-hospital and consistency flags, with its rule log in `workspace.talaria.silver_stage3_rule_counts`, built by `notebooks/05_silver_stage3`
 - **Gold**: `workspace.talaria.gold_*`, aggregates and features for the analysis
 
 Run notebooks in order:
@@ -27,7 +28,8 @@ Run notebooks in order:
 1. `01_bronze_ingest`: source tables → bronze
 2. `02_silver_base`: bronze facilities → Silver base. Runs the runtime checks (a failure stops the run before anything is written) and prints before/after counts per step.
 3. `03_silver_facilities`: Silver base, bronze facilities and bronze pincodes → Silver facilities. Runs the runtime checks (a failure stops the run before anything is written) and prints true/false counts per flag.
-4. Gold (to come)
+4. `05_silver_stage3`: Silver facilities → Silver Stage 3. Prints the cross-tabs of the two Stage 2 flags it replaces, runs the runtime checks (a failure stops the run before anything is written), writes the table and its rule log, and shows sample rows for C2-C5.
+5. Gold (to come)
 
 ## Code
 
@@ -40,6 +42,12 @@ Run notebooks in order:
   - `checks.py`: `check_silver_facilities(silver_base_df, silver_facilities_df)`, the runtime checks the notebook runs on live data.
   - `flag_counts.py`: `flag_counts` and `format_flag_counts`, the per-flag counts the notebook prints.
   - One module per flag group (`contacts.py` is group A, `size.py` B, `specialty.py` C, `description.py` D, `affiliation.py` E, `sources.py` F, `page_dates.py` G, `location.py` H). To add a group: write its `add_columns` in a new module, call it in `pipeline.py`, list its columns in `columns.py`.
+- `talaria/silver_stage3/`: the Silver Stage 3 module (#35). Its public entry point is `build_silver_stage3(silver_facilities_df, references=None) -> stage3_df`, with the same no-reads, no-writes rule; `load_references()` reads the reference CSVs, and is the default.
+  - `reference/`: the six reference CSVs (specialty code → category, text keywords per category, related categories, procedure/equipment rules, capability units, high-risk categories), the only source of Stage 3's mappings and patterns ([ADR 0003](docs/adr/0003-stage3-reference-csvs.md)). Edit a pattern there, not in code.
+  - `columns.py`: the two Stage 2 flags Stage 3 replaces and drops, and the new columns (name, step, type).
+  - `checks.py`: `check_silver_stage3(silver_facilities_df, stage3_df)`, the runtime checks the notebook runs on live data.
+  - `rule_counts.py`: `rule_counts`, the rule log, and `replaced_flag_crosstabs`.
+  - One module per step: `specialty_categories.py` (step 1), `capacity.py` (R0), `name_type.py` (F1), `large_hospital.py` (R1-R5), `consistency.py` (C1-C5); `text.py` holds the shared definitions.
 - `talaria/care_finder/`: the care finder app's logic (spec #26). `items.py` is the only Spark module: `build_app_tables(facilities) -> (app_facilities, app_facility_items)` for `03_app_tables`. The rest is plain Python, so the app imports it without Spark:
   - `recommend.py`: `recommend(service, location, urgency)`, the query flow. All IO goes through `backend.py` (SQL warehouse, search, model serving), so tests pass a fake backend.
   - `search.py`: the expanding H3 ring loop; `labels.py`: the LLM check prompt, output validation and similarity fallback; `scoring.py`: hit values, noisy-OR, rank and bands; `reasons.py`: flag → fixed warning or ✓ line; `location.py`: PIN / district / city / coordinates parsing.
@@ -61,6 +69,8 @@ uv run pytest
 Test cleaning rules only through `build_silver_base`: build a fake bronze DataFrame with `make_bronze`, run `build_silver_base(bronze, no_pincodes)` (or a `make_pincodes(...)` directory for state-check rules), check the output rows and columns. The runtime checks and step counts have their own tests (`tests/test_checks.py`, `tests/test_step_counts.py`).
 
 Test Silver facilities rules only through `build_silver_facilities`: get `bronze, silver_base` from `make_silver_inputs(...)`, build with a fixed run date, check the output. Its runtime checks and flag counts are tested in `tests/test_silver_facilities_checks.py`.
+
+Test Silver Stage 3 rules only through `build_silver_stage3`, on Silver facilities built from `make_silver_inputs(...)` and the reference CSVs in the repo (`tests/test_silver_stage3.py`).
 
 ## Running the app
 
