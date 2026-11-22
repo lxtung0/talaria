@@ -1,0 +1,5 @@
+databricks-sdk>=0.40
+h3>=4,<5
+streamlit>=1.40
+pydeck>=0.9
+pandas
