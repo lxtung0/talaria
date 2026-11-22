@@ -27,8 +27,16 @@ A value filled in from other columns or tables where the source stated none; onl
 _Avoid_: imputed value, derived value
 
 **Source tables**:
-The three Virtue Foundation tables the project uses: facilities, the India Post pincode directory and the NFHS-5 district health indicators. No other data is used.
+The three Virtue Foundation tables the project uses: facilities, the India Post pincode directory and the NFHS-5 district health indicators. They are the only source of facts about facilities. See ADR 0002.
 _Avoid_: raw data, CSV
+
+**Reference table**:
+A small, hand-built table of outside knowledge (for example the equipment and procedures a specialty needs), each row citing the official document and page it came from. It is only compared against facility data and never fills or changes a facility value. See ADR 0002.
+_Avoid_: external data, lookup table, source table
+
+**Consistency flag**:
+A boolean recording a factual disagreement between two values of the same Facility (an official phone missing from its own phone list, a description naming a different state). It is always true or false, never NULL: a check that can't run is false. It states the fact only; whether it lowers trust is decided in Gold.
+_Avoid_: red flag, error flag, trust flag
 
 ### Facilities
 
