@@ -248,3 +248,25 @@ def test_an_unknown_location_is_a_clear_error(location):
     result = recommend("MRI", location, backend=FakeBackend([], {}))
 
     assert result["status"] == "error" and result["error"]
+
+
+def test_rounds_list_each_band_and_the_facilities_checked_in_it_with_their_best_label():
+    (near_lat, near_lon), = ring_points(1, 1)
+    (mid_lat, mid_lon), = ring_points(3, 1)
+    (far_lat, far_lon), = ring_points(5, 1)
+    backend = FakeBackend(
+        [facility_at(near_lat, near_lon, "near"), facility_at(mid_lat, mid_lon, "mid"), facility_at(far_lat, far_lon, "far")],
+        {"near": ("equipment", "CT scanner", 0.85), "mid": ("capability", "Dialysis", 0.95), "far": ("procedure", "Hemodialysis", 0.95)},
+        llm_labels={"near-e0": "unrelated", "mid-e0": "related"},
+    )
+
+    result = recommend("dialysis", "Patna", backend=backend)
+
+    rounds = result["rounds"]
+    assert [r["k"] for r in rounds] == [1, 2, 3, 4, 6, 8, 10, 12, 14, 15]
+    start = h3.latlng_to_cell(*PATNA, 5)
+    assert set(rounds[0]["cells"]) == set(h3.grid_disk(start, 1))
+    assert rounds[0]["facilities"] == [{"unique_id": "near", "lat": near_lat, "lon": near_lon, "label": None}]
+    assert rounds[2]["facilities"] == [{"unique_id": "mid", "lat": mid_lat, "lon": mid_lon, "label": "related"}]
+    assert rounds[4]["facilities"] == [{"unique_id": "far", "lat": far_lat, "lon": far_lon, "label": "direct"}]
+    assert rounds[1]["facilities"] == []

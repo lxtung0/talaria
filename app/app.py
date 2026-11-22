@@ -6,6 +6,7 @@ Every line on a card comes from `talaria.care_finder.present` templates.
 
 import os
 import sys
+import time
 
 # From the repo, the package and config.py are one folder up; in the deployed app
 # they are copied next to this file (see scripts/deploy_app.sh).
@@ -138,14 +139,54 @@ for i, result in enumerate(top, 1):
     card(result, i)
 
 # --- Map -------------------------------------------------------------------------
+# The map slot comes first on the page, but is filled last: the cards and the other
+# options show at once, then the search replays underneath the cards.
 
-points = [{"lat": answer["location"]["lat"], "lon": answer["location"]["lon"], "color": "#1f6feb", "size": 300}]
-points += [{"lat": r["latitude"], "lon": r["longitude"], "color": "#d1242f", "size": 200} for r in top]
-points += [{"lat": r["latitude"], "lon": r["longitude"], "color": "#9a6700", "size": 120} for r in others]
-st.map(pd.DataFrame(points), color="color", size="size")
-st.caption("Blue: your location · Red: top results · Amber: other options")
+map_slot = st.container()
 
 if others:
     with st.expander("Other options we considered"):
         for result in others:
             st.markdown(f"- {md(present.other_line(result, top[-1] if top else None))}")
+
+
+def static_map() -> None:
+    points = [{"lat": answer["location"]["lat"], "lon": answer["location"]["lon"], "color": "#1e5adc", "size": 300}]
+    points += [{"lat": r["latitude"], "lon": r["longitude"], "color": "#008c46", "size": 200} for r in top]
+    points += [{"lat": r["latitude"], "lon": r["longitude"], "color": "#eb8700", "size": 120} for r in others]
+    st.map(pd.DataFrame(points), color="color", size="size")
+    st.caption("Blue: your location · Green: top results · Orange: other options")
+
+
+def search_map() -> None:
+    from talaria.care_finder import search_map as sm
+
+    rounds = answer["rounds"]
+    last = len(rounds) - 1
+    st.markdown("**How the search grew**")
+    chart, label = st.empty(), st.empty()
+    st.caption(sm.LEGEND)
+    replay_col, slider_col = st.columns([1, 3], vertical_alignment="bottom")
+    replay = replay_col.button("Replay search", width="stretch")
+    query = st.session_state.query
+    if replay or st.session_state.get("animated_for") != query:
+        st.session_state.animated_for = query
+        for i in range(last + 1):
+            chart.pydeck_chart(sm.frame(answer, i), height=420)
+            label.caption(sm.caption(answer, i))
+            time.sleep(sm.FRAME_SECONDS)
+        st.session_state.round_slider = last + 1
+    if last == 0:
+        chosen = 1
+    else:
+        default = {} if "round_slider" in st.session_state else {"value": last + 1}
+        chosen = slider_col.slider("Round", 1, last + 1, key="round_slider", **default)
+    chart.pydeck_chart(sm.frame(answer, chosen - 1), height=420)
+    label.caption(sm.caption(answer, chosen - 1))
+
+
+with map_slot:
+    if answer.get("rounds"):
+        search_map()
+    else:  # an answer without rounds, e.g. from an older cache
+        static_map()

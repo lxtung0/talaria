@@ -99,8 +99,12 @@ def _recommend(service: str, location: str, urgency: str, backend, settings: Set
     if new_labels:
         backend.save_labels(service_key, new_labels)
 
+    # One read for every Facility checked: the scored ones and, for the search map, the rest.
+    checked = sorted({uid for r in found["rounds"] for uid in r["facilities_checked"]})
+    facilities = {f["unique_id"]: f for f in backend.facilities(checked)} if checked else {}
+
     with tracing.span("scoring", {"facilities": len({h["unique_id"] for h in found["hits"]})}) as span:
-        results = score_facilities(found["hits"], backend, place, urgency, settings)
+        results = score_facilities(found["hits"], facilities, place, urgency, settings)
         span.set_outputs(
             [
                 {
@@ -132,8 +136,30 @@ def _recommend(service: str, location: str, urgency: str, backend, settings: Set
             "stop_reason": found["stop_reason"],
             "direct_facilities": len(direct_facilities(found["hits"])),
         },
-        "round_details": found["rounds"],
+        "rounds": map_rounds(found["rounds"], found["hits"], facilities),
+        "round_details": [{k: v for k, v in r.items() if k not in ("cells", "facilities_checked")} for r in found["rounds"]],
     }
+
+
+def map_rounds(rounds: list[dict], hits: list[dict], facilities: dict) -> list[dict]:
+    """Per round, for the search map: `k`, the new H3 cells, and each Facility checked with its best label."""
+    best: dict[str, str] = {}
+    for hit in hits:
+        if hit["label"] == "direct" or (hit["label"] == "related" and best.get(hit["unique_id"]) != "direct"):
+            best[hit["unique_id"]] = hit["label"]
+    return [
+        {
+            "k": r["k"],
+            "radius_km": r["radius_km"],
+            "cells": r["cells"],
+            "facilities": [
+                {"unique_id": uid, "lat": facilities[uid]["latitude"], "lon": facilities[uid]["longitude"], "label": best.get(uid)}
+                for uid in r["facilities_checked"]
+                if uid in facilities
+            ],
+        }
+        for r in rounds
+    ]
 
 
 def _brief(hits: list[dict]) -> list[dict]:
@@ -176,15 +202,12 @@ def _label_hits(service, hits, cache, new_labels, backend, settings):
     return labels, info
 
 
-def score_facilities(hits: list[dict], backend, place: Place, urgency: str, settings: Settings = DEFAULT) -> list[dict]:
-    """One result per Facility with a direct or related hit, best rank first."""
+def score_facilities(hits: list[dict], facilities: dict, place: Place, urgency: str, settings: Settings = DEFAULT) -> list[dict]:
+    """One result per Facility with a direct or related hit, best rank first. `facilities` is by `unique_id`."""
     by_facility: dict[str, list[dict]] = {}
     for hit in hits:
         if hit["label"] in ("direct", "related"):
             by_facility.setdefault(hit["unique_id"], []).append(hit)
-    if not by_facility:
-        return []
-    facilities = {f["unique_id"]: f for f in backend.facilities(sorted(by_facility))}
     results = [
         build_result(facilities[uid], facility_hits, place, urgency, settings)
         for uid, facility_hits in by_facility.items()
