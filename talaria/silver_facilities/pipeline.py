@@ -8,7 +8,7 @@ import datetime
 
 from pyspark.sql import DataFrame
 
-from talaria.silver_facilities import affiliation, columns, contacts, description, location, page_dates, size, specialty
+from talaria.silver_facilities import affiliation, columns, contacts, description, location, page_dates, size, sources, specialty
 
 
 def build_silver_facilities(
@@ -26,6 +26,7 @@ def build_silver_facilities(
     df = specialty.add_columns(df)
     df = description.add_columns(df)
     df = affiliation.add_columns(df, bronze)
+    df = sources.add_columns(df)
     df = page_dates.add_columns(df, run_date)
     df = location.add_columns(df, pincodes)
     # Only listed columns leave the function, so a group's working columns are never stored.
