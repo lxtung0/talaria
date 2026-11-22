@@ -91,7 +91,8 @@ def summary(answer: dict) -> str:
 def search_extent(answer: dict) -> str:
     s = answer["search"]
     why = "enough strong matches were found" if s["stop_reason"] == "enough matches" else "it reached the maximum distance"
-    return f"Searched about {s['searched_radius_km']:.0f} km around {answer['location']['label']} in {s['rounds']} steps; stopped because {why}."
+    steps = "1 step" if s["rounds"] == 1 else f"{s['rounds']} steps"
+    return f"Searched about {s['searched_radius_km']:.0f} km around {answer['location']['label']} in {steps}; stopped because {why}."
 
 
 def other_line(result: dict, last_top: dict | None) -> str:

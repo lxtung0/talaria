@@ -20,7 +20,8 @@ uv run --project "$root" python "$root/scripts/app_permissions.py"
 out=$("$root/scripts/build_app.sh")
 me=$(databricks current-user me -o json | python3 -c 'import json,sys;print(json.load(sys.stdin)["userName"])')
 dest="/Workspace/Users/$me/apps/$app"
-databricks sync --full "$out" "$dest"
+# import-dir, not sync: sync skips build/ because it is gitignored.
+databricks workspace import-dir "$out" "$dest" --overwrite >/dev/null
 
 state=$(databricks apps get "$app" -o json | python3 -c 'import json,sys;print(json.load(sys.stdin).get("compute_status",{}).get("state",""))')
 if [ "$state" != "ACTIVE" ]; then

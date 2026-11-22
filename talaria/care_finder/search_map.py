@@ -28,6 +28,10 @@ def caption(answer: dict, i: int) -> str:
     return f"Round {i + 1} · {rounds[i]['radius_km']:.0f} km · {direct} direct {matches} so far"
 
 
+def top_names(answer: dict) -> str:
+    return " · ".join(f"{n}. {r['name']}" for n, r in enumerate(answer["top"], 1))
+
+
 def _zoom(radius_km: float) -> float:
     """A fixed zoom that fits the final search radius, so the camera stays still while the ring grows."""
     return max(4.0, min(11.0, 9.3 - math.log2(max(radius_km, 5.0) / 10.0)))
@@ -50,7 +54,7 @@ def frame(answer: dict, i: int) -> pdk.Deck:
             "ScatterplotLayer",
             [f for f in checked if f["label"] == "direct"],
             get_position=["lon", "lat"],
-            get_radius=3800,
+            get_radius=2500,
             radius_min_pixels=8,
             stroked=True,
             filled=False,
@@ -70,7 +74,8 @@ def frame(answer: dict, i: int) -> pdk.Deck:
         ),
     ]
     if i == len(rounds) - 1 and answer["top"]:
-        labels = [{"lat": r["latitude"], "lon": r["longitude"], "text": f"{n}. {r['name']}"} for n, r in enumerate(answer["top"], 1)]
-        layers.append(pdk.Layer("TextLayer", labels, get_position=["lon", "lat"], get_text="text", get_size=13, get_color=[20, 20, 20], get_pixel_offset=[0, -18], background=True, get_background_color=[255, 255, 255, 220]))
+        # Numbers only: names would overlap where Facilities cluster; `top_names` lists them under the map.
+        labels = [{"lat": r["latitude"], "lon": r["longitude"], "text": str(n)} for n, r in enumerate(answer["top"], 1)]
+        layers.append(pdk.Layer("TextLayer", labels, get_position=["lon", "lat"], get_text="text", get_size=16, get_color=[20, 20, 20], get_pixel_offset=[0, -20], background=True, get_background_color=[255, 255, 255, 230]))
     view = pdk.ViewState(latitude=me["lat"], longitude=me["lon"], zoom=_zoom(rounds[-1]["radius_km"]))
     return pdk.Deck(layers=layers, initial_view_state=view, map_provider="carto", map_style="light")

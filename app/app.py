@@ -182,7 +182,7 @@ def search_map() -> None:
         default = {} if "round_slider" in st.session_state else {"value": last + 1}
         chosen = slider_col.slider("Round", 1, last + 1, key="round_slider", **default)
     chart.pydeck_chart(sm.frame(answer, chosen - 1), height=420)
-    label.caption(sm.caption(answer, chosen - 1))
+    label.caption(sm.caption(answer, chosen - 1) + (f" · {sm.top_names(answer)}" if chosen - 1 == last and top else ""))
 
 
 with map_slot:
