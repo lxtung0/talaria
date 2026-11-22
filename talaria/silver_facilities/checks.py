@@ -17,6 +17,7 @@ def check_silver_facilities(silver_base: DataFrame, facilities: DataFrame) -> No
     - Row count equals Silver base; `unique_id` is unique and non-null.
     - Every Silver base value is unchanged.
     - No flag is NULL.
+    - `primary_affiliation` is NULL exactly when `affiliation_types` is NULL.
     """
     failures = _schema_failures(silver_base, facilities)
     if failures:
@@ -27,6 +28,7 @@ def check_silver_facilities(silver_base: DataFrame, facilities: DataFrame) -> No
     counts = facilities.agg(
         *unique_id_counts(),
         *[F.count(F.when(F.col(name).isNull(), 1)).alias(f"null:{name}") for name in flags],
+        *_primary_affiliation_counts(),
     ).first()
 
     failures = unique_id_failures(counts)
@@ -36,6 +38,7 @@ def check_silver_facilities(silver_base: DataFrame, facilities: DataFrame) -> No
     for name in flags:
         if counts[f"null:{name}"]:
             failures.append(f"{name}: {counts[f'null:{name}']} row(s) with a NULL flag")
+    failures += _primary_affiliation_failures(counts)
     failures += _changed_value_failures(silver_base, facilities)
     if failures:
         _fail(failures)
@@ -43,6 +46,23 @@ def check_silver_facilities(silver_base: DataFrame, facilities: DataFrame) -> No
 
 def _fail(failures: list[str]) -> None:
     raise ValueError("Silver facilities runtime checks failed:\n- " + "\n- ".join(failures))
+
+
+def _primary_affiliation_counts() -> list[Column]:
+    primary, affiliations = F.col("primary_affiliation"), F.col("affiliation_types")
+    return [
+        F.count(F.when(primary.isNull() & affiliations.isNotNull(), 1)).alias("primary_missing"),
+        F.count(F.when(primary.isNotNull() & affiliations.isNull(), 1)).alias("primary_unexpected"),
+    ]
+
+
+def _primary_affiliation_failures(counts) -> list[str]:
+    failures = []
+    if counts.primary_missing:
+        failures.append(f"primary_affiliation: {counts.primary_missing} row(s) NULL while affiliation_types isn't")
+    if counts.primary_unexpected:
+        failures.append(f"primary_affiliation: {counts.primary_unexpected} row(s) set while affiliation_types is NULL")
+    return failures
 
 
 def _schema_failures(silver_base: DataFrame, facilities: DataFrame) -> list[str]:

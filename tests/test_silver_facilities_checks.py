@@ -1,6 +1,7 @@
 """Silver facilities runtime checks and flag counts (spec #13), run on the public function's output."""
 
 import datetime
+import re
 
 import pytest
 from pyspark.sql import functions as F
@@ -15,7 +16,7 @@ def tables(make_silver_inputs, no_pincodes):
     """`(silver_base, silver_facilities)` for two Facilities."""
     bronze, silver_base = make_silver_inputs(
         {"unique_id": "a", "name": "City Hospital", "recency_of_page_update": "3 weeks ago"},
-        {"unique_id": "b", "phone_numbers": '["98765 43210"]'},
+        {"unique_id": "b", "phone_numbers": '["98765 43210"]', "affiliationTypeIds": '["government"]'},
     )
     return silver_base, build_silver_facilities(silver_base, bronze, no_pincodes, datetime.date(2026, 11, 21))
 
@@ -47,6 +48,21 @@ def test_null_flag_fails(tables):
     broken = facilities.withColumn("flag_future_page_update", F.lit(None).cast("boolean"))
 
     with pytest.raises(ValueError, match=r"flag_future_page_update: 2 row\(s\) with a NULL flag"):
+        check_silver_facilities(base, broken)
+
+
+@pytest.mark.parametrize(
+    "primary, failing",
+    [
+        ("CAST(NULL AS string)", "1 row(s) NULL while affiliation_types isn't"),
+        ("'government'", "1 row(s) set while affiliation_types is NULL"),
+    ],
+)
+def test_primary_affiliation_null_mismatch_fails(tables, primary, failing):
+    base, facilities = tables
+    broken = facilities.withColumn("primary_affiliation", F.expr(primary))
+
+    with pytest.raises(ValueError, match=rf"primary_affiliation: {re.escape(failing)}"):
         check_silver_facilities(base, broken)
 
 
@@ -90,6 +106,10 @@ def test_replaced_unique_id_fails(tables):
             lambda df: df.withColumn("flag_future_page_update", F.lit("false")),
             "flag_future_page_update: type is string, expected boolean",
         ),
+        (
+            lambda df: df.withColumn("primary_affiliation", F.lit(1)),
+            "primary_affiliation: type is int, expected string",
+        ),
         (lambda df: df.withColumn("page_date", F.current_date()), "page_date: unexpected column"),
     ],
 )
@@ -105,4 +125,5 @@ def test_counts_true_and_false_per_flag(tables):
 
     assert counts["flag_page_update_unparsable"] == {"true": 1, "false": 1}
     assert counts["flag_future_page_update"] == {"true": 0, "false": 2}
+    assert "primary_affiliation" not in counts  # a value, not a flag
     assert "flag_page_update_unparsable" in format_flag_counts(counts)

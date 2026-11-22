@@ -26,6 +26,9 @@ NEW_COLUMNS = [
     NewColumn("flag_official_website_not_in_list", "A"),
     # B. Size consistency.
     NewColumn("flag_bed_doctor_ratio_outlier", "B"),
+    # E. Affiliation. `primary_affiliation` is the one value column, and the one that can be NULL.
+    NewColumn("flag_affiliation_operator_conflict", "E"),
+    NewColumn("primary_affiliation", "E", "string"),
     # G. Page update date.
     NewColumn("flag_page_update_unparsable", "G"),
     NewColumn("flag_future_page_update", "G"),
