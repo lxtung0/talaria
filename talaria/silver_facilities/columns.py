@@ -20,6 +20,12 @@ class NewColumn:
 
 
 NEW_COLUMNS = [
+    # A. Contact consistency.
+    NewColumn("flag_official_phone_not_in_list", "A"),
+    NewColumn("flag_phone_list_without_official", "A"),
+    NewColumn("flag_official_website_not_in_list", "A"),
+    # B. Size consistency.
+    NewColumn("flag_bed_doctor_ratio_outlier", "B"),
     # G. Page update date.
     NewColumn("flag_page_update_unparsable", "G"),
     NewColumn("flag_future_page_update", "G"),
