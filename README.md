@@ -40,6 +40,11 @@ Run notebooks in order:
   - `checks.py`: `check_silver_facilities(silver_base_df, silver_facilities_df)`, the runtime checks the notebook runs on live data.
   - `flag_counts.py`: `flag_counts` and `format_flag_counts`, the per-flag counts the notebook prints.
   - One module per flag group (`contacts.py` is group A, `size.py` B, `specialty.py` C, `description.py` D, `affiliation.py` E, `sources.py` F, `page_dates.py` G, `location.py` H). To add a group: write its `add_columns` in a new module, call it in `pipeline.py`, list its columns in `columns.py`.
+- `talaria/care_finder/`: the care finder app's logic (spec #26). `items.py` is the only Spark module: `build_app_tables(facilities) -> (app_facilities, app_facility_items)` for `03_app_tables`. The rest is plain Python, so the app imports it without Spark:
+  - `recommend.py`: `recommend(service, location, urgency)`, the query flow. All IO goes through `backend.py` (SQL warehouse, Vector Search, model serving), so tests pass a fake backend.
+  - `search.py`: the expanding H3 ring loop; `labels.py`: the LLM check prompt, output validation and similarity fallback; `scoring.py`: hit values, noisy-OR, rank and bands; `reasons.py`: flag → fixed warning or ✓ line; `location.py`: PIN / district / city / coordinates parsing.
+  - `settings.py`: every tunable number. `present.py`: the UI's text templates. `search_map.py`: the animated pydeck map. `tracing.py`: MLflow spans that can never break a query.
+- `app/`: the Streamlit app (`app.py`, `app.yaml`, `requirements.txt`). `scripts/build_app.sh` bundles it with the package for deploy.
 - Notebooks import the package and `config.py` from the repo root (`sys.path.insert(0, os.path.abspath(".."))`), so run them from the Databricks Git folder.
 - `tests/`: pytest tests that run against a local Spark session, no Databricks needed. `tests/conftest.py` has the `spark` fixture; `make_bronze`, which builds a small fake bronze facilities DataFrame from partial rows; `make_pincodes`, which builds a fake pincode directory from `(pincode, district, statename)` offices; `no_pincodes`, an empty directory for tests that don't exercise the state check; and `make_silver_inputs`, which builds matching bronze and Silver base inputs for the Silver facilities tests.
 
@@ -80,6 +85,8 @@ databricks apps start talaria-care-finder   # then open the URL from: databricks
 ```
 
 **Switch the source table to Gold:** set `APP_SOURCE_FACILITIES` in `config.py` to the Gold table (it should have a `confidence_score` column; without one the app uses 0.5), re-run `03_app_tables`, then redeploy.
+
+**Tracing:** every `recommend()` call is an MLflow trace in the experiment `/Shared/talaria-care-finder` (spans: resolve location, each search round with its Vector Search and LLM check, loop summary, scoring, ranking; tagged with service, location, urgency and fallback). The app shows the trace id and a link under "How we decided". Set `TALARIA_TRACING=0` to turn it off; if MLflow is unreachable, queries still run.
 
 **Tuning:** every scoring number and search setting is in `talaria/care_finder/settings.py`.
 
