@@ -18,9 +18,36 @@ All table names live in [`config.py`](config.py). Notebooks import from it inste
 
 - **Bronze**: `workspace.talaria.bronze_*`, raw snapshots of the source tables, built by `notebooks/01_bronze_ingest`
 - **Silver**: `workspace.talaria.silver_*`, cleaned, typed, de-duplicated
+  - **Silver base**: `workspace.talaria.silver_facilities_base`, objective fixes only, built by `notebooks/02_silver_base`
+  - **Silver facilities**: `workspace.talaria.silver_facilities`, the final Silver stage, read from Silver base (not built yet)
 - **Gold**: `workspace.talaria.gold_*`, aggregates and features for the analysis
 
-Run notebooks in order: `01_bronze_ingest` → silver cleaning → gold.
+Run notebooks in order:
+
+1. `01_bronze_ingest`: source tables → bronze
+2. `02_silver_base`: bronze facilities → Silver base. Runs the runtime checks (a failure stops the run before anything is written) and prints before/after counts per step.
+3. Silver facilities, then gold (to come)
+
+## Code
+
+- `talaria/silver_base/`: the Silver base cleaning module. Its one public entry point is `build_silver_base(bronze_df, pincodes_df) -> silver_base_df`, where `pincodes_df` is the bronze pincode directory each Facility's state is checked against ([ADR 0001](docs/adr/0001-silver-base-state-check.md)); it does no reads or writes, so it runs on any Spark session.
+  - `columns.py`: which columns Silver base drops, parses, types and renames, and which Spelling fix or format rule each gets. The pipeline and the step counts both read these tables, so a new column or rule is one edit there.
+  - `checks.py`: `check_silver_base(silver_base_df)`, the runtime checks the notebook runs on live data.
+  - `step_counts.py`: `step_counts(bronze_df, silver_base_df)` and `format_step_counts`, the per-step counts the notebook prints, worked out by comparing bronze with the output.
+- Notebooks import the package and `config.py` from the repo root (`sys.path.insert(0, os.path.abspath(".."))`), so run them from the Databricks Git folder.
+- `tests/`: pytest tests that run against a local Spark session, no Databricks needed. `tests/conftest.py` has the `spark` fixture; `make_bronze`, which builds a small fake bronze facilities DataFrame from partial rows; `make_pincodes`, which builds a fake pincode directory from `(pincode, district, statename)` offices; and `no_pincodes`, an empty directory for tests that don't exercise the state check.
+
+## Running tests locally
+
+Needs [`uv`](https://docs.astral.sh/uv/) and a JDK 17 (Spark 3.5 runs on the JVM).
+
+```sh
+uv sync                                         # creates .venv with pyspark + pytest (dev group)
+export JAVA_HOME=$(/usr/libexec/java_home -v 17) # macOS; elsewhere point JAVA_HOME at a JDK 17
+uv run pytest
+```
+
+Test cleaning rules only through `build_silver_base`: build a fake bronze DataFrame with `make_bronze`, run `build_silver_base(bronze, no_pincodes)` (or a `make_pincodes(...)` directory for state-check rules), check the output rows and columns. The runtime checks and step counts have their own tests (`tests/test_checks.py`, `tests/test_step_counts.py`).
 
 ## Working in Databricks
 

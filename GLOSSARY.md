@@ -7,11 +7,11 @@ Datathon project assessing Indian healthcare facilities from the Virtue Foundati
 ### Data layers
 
 **Silver**:
-The layer where only objective mistakes are fixed: wrong types, broken rows, duplicate rows, placeholder nulls and impossible values. Silver never judges how trustworthy a source or value is.
+The layer where only objective mistakes are fixed: wrong types, broken rows, duplicate rows, placeholder nulls, impossible values, and a state that its PIN and city agree is wrong. Silver never judges how trustworthy a source or value is.
 _Avoid_: clean data (ambiguous), validated data
 
 **Silver base**:
-The first Silver stage, made of easy, objective fixes: broken and duplicate rows removed, whitespace and missing values normalized, lists parsed and de-duplicated, spelling fixes applied, values put into one standard format, and types converted where every value converts cleanly. Values it cannot fix are left untouched for Silver facilities.
+The first Silver stage, made of easy, objective fixes: broken and duplicate rows removed, whitespace and missing values normalized, lists parsed and de-duplicated, spelling fixes applied, values put into one standard format, types converted where every value converts cleanly, and a state corrected where its PIN and city both name another state (see ADR 0001). Values it cannot fix are left untouched, and flagged where the pincode directory disagrees, for Silver facilities.
 _Avoid_: stage 1 table, silver v1
 
 **Silver facilities**:
@@ -23,7 +23,7 @@ The layer where facilities are evaluated by the quality of their data, including
 _Avoid_: final table, analysis table
 
 **Inferred value**:
-A value filled in from other columns or tables rather than stated by the source; only created in Gold, and always marked as unverified.
+A value filled in from other columns or tables where the source stated none; only created in Gold, and always marked as unverified. Correcting a stated value that other source values agree is wrong (a state from its PIN and city) is a fix, not an Inferred value.
 _Avoid_: imputed value, derived value
 
 **Source tables**:
