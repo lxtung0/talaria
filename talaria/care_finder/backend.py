@@ -6,6 +6,7 @@ Each method is one small call; `recommend` holds the logic.
 """
 
 import json
+import os
 import time
 
 from databricks.sdk import WorkspaceClient
@@ -23,9 +24,10 @@ LABELS_SCHEMA = "item_id STRING, service_query STRING, label STRING, reason STRI
 
 
 class DatabricksBackend:
-    def __init__(self, client: WorkspaceClient | None = None, warehouse_id: str = APP_WAREHOUSE_ID):
+    def __init__(self, client: WorkspaceClient | None = None, warehouse_id: str | None = None):
         self.w = client or WorkspaceClient()
-        self.warehouse_id = warehouse_id
+        # Inside the App the warehouse comes from its resource; elsewhere from config.py.
+        self.warehouse_id = warehouse_id or os.environ.get("DATABRICKS_WAREHOUSE_ID") or APP_WAREHOUSE_ID
 
     # --- SQL -------------------------------------------------------------
 
