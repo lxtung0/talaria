@@ -30,6 +30,10 @@ def _listed(hosts: list[str]) -> str:
 
 
 _DIRECTORY_OR_SOCIAL = _listed(reference_hosts.DIRECTORY_HOSTS + reference_hosts.SOCIAL_HOSTS)
+# An official website on one of these isn't the facility's own site, so it never counts as one.
+_NOT_OWN_SITE = _listed(
+    reference_hosts.DIRECTORY_HOSTS + reference_hosts.SOCIAL_HOSTS + reference_hosts.SHARED_PLATFORM_HOSTS
+)
 _GOVERNMENT = "(" + "|".join(re.escape(s) for s in reference_hosts.GOVERNMENT_SUFFIXES) + ")$"
 
 
@@ -43,7 +47,9 @@ def add_columns(df: DataFrame) -> DataFrame:
     hosts = F.array_distinct(F.filter(F.transform(F.col("source_urls"), host), lambda h: h.isNotNull()))
     df = df.withColumn("_f_hosts", F.coalesce(hosts, F.array().cast("array<string>")))
     any_host = F.size(F.col("_f_hosts")) > 0
-    own_site = host(F.col("official_website"))
+    official = host(F.col("official_website"))
+    # A Facebook, directory or shared-platform page isn't the facility's own site.
+    own_site = F.when(~official.rlike(_NOT_OWN_SITE), official)
 
     return df.withColumns(
         {

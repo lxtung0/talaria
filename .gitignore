@@ -1,5 +1,6 @@
 # Data files stay in Unity Catalog, not git
 *.csv
+!talaria/silver_stage3/reference/*.csv
 *.tsv
 *.parquet
 *.xlsx
@@ -17,3 +18,4 @@ __pycache__/
 .venv/
 .databricks/
 .DS_Store
+build/

@@ -1,7 +1,7 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 04 · Gold
-# MAGIC Builds the Gold tables (spec #37) from Silver facilities:
+# MAGIC # 06 · Gold
+# MAGIC Builds the Gold tables (spec #37) from Silver Stage 3 (run `05_silver_stage3` first):
 # MAGIC - `gold_facilities`: one row per Facility, with `confidence_score` (0–1) and its log, `confidence_reasons`
 # MAGIC - `gold_facility_items`: one row per claim (specialty, procedure, equipment, capability, description sentence)
 # MAGIC
@@ -14,7 +14,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath(".."))
-from config import GOLD, SILVER
+from config import GOLD, SILVER_STAGE3
 
 from talaria.gold import build_gold
 from talaria.gold.checks import check_gold
@@ -22,19 +22,19 @@ from talaria.gold.score_counts import format_score_counts, score_counts
 
 # COMMAND ----------
 
-silver_facilities = spark.table(SILVER["facilities"])
-gold_facilities, gold_facility_items = build_gold(silver_facilities)
+silver_stage3 = spark.table(SILVER_STAGE3["facilities"])
+gold_facilities, gold_facility_items = build_gold(silver_stage3)
 
 # COMMAND ----------
 
 # Raises (and stops the run) if a row or copied value changed, a score doesn't
 # replay from its log, or an item count differs from its Silver list.
-check_gold(silver_facilities, gold_facilities, gold_facility_items)
+check_gold(silver_stage3, gold_facilities, gold_facility_items)
 print("Runtime checks passed")
 
 # COMMAND ----------
 
-print(format_score_counts(score_counts(silver_facilities, gold_facilities)))
+print(format_score_counts(score_counts(silver_stage3, gold_facilities)))
 
 # COMMAND ----------
 
