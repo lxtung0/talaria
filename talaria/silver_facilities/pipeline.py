@@ -8,7 +8,7 @@ import datetime
 
 from pyspark.sql import DataFrame
 
-from talaria.silver_facilities import affiliation, columns, contacts, location, page_dates, size
+from talaria.silver_facilities import affiliation, columns, contacts, description, location, page_dates, size, specialty
 
 
 def build_silver_facilities(
@@ -23,6 +23,8 @@ def build_silver_facilities(
     df = silver_base
     df = contacts.add_columns(df)
     df = size.add_columns(df)
+    df = specialty.add_columns(df)
+    df = description.add_columns(df)
     df = affiliation.add_columns(df, bronze)
     df = page_dates.add_columns(df, run_date)
     df = location.add_columns(df, pincodes)

@@ -45,6 +45,8 @@ def test_adds_only_the_new_columns(make_silver_inputs, no_pincodes):
         ("flag_phone_list_without_official", "boolean"),
         ("flag_official_website_not_in_list", "boolean"),
         ("flag_bed_doctor_ratio_outlier", "boolean"),
+        ("flag_specialty_unsupported_by_capability", "boolean"),
+        ("flag_desc_mentions_other_state", "boolean"),
         ("flag_affiliation_operator_conflict", "boolean"),
         ("primary_affiliation", "string"),
         ("flag_page_update_unparsable", "boolean"),
