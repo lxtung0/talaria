@@ -123,13 +123,16 @@ class DatabricksBackend:
         return self.sql(
             f"""WITH q AS (SELECT ai_query('{APP_EMBEDDING_MODEL}', :service) AS v),
             band AS (SELECT * FROM {APP['facility_items']}
-                     WHERE array_contains(from_json(:cells, 'array<string>'), h3_r5) AND embedding IS NOT NULL)
-            SELECT item_id, unique_id, item_type, item_text, h3_r5,
+                     WHERE array_contains(from_json(:cells, 'array<string>'), h3_r5) AND embedding IS NOT NULL),
+            ranked AS (SELECT item_id, unique_id, item_type, item_text, h3_r5,
                 aggregate(zip_with(band.embedding, q.v, (a, b) -> a * b), 0D, (acc, x) -> acc + x)
                 / (sqrt(aggregate(band.embedding, 0D, (acc, x) -> acc + x * x)) * sqrt(aggregate(q.v, 0D, (acc, x) -> acc + x * x)))
                 AS similarity
-            FROM band CROSS JOIN q
-            ORDER BY similarity DESC LIMIT {int(num_results)}""",
+                FROM band CROSS JOIN q
+                ORDER BY similarity DESC LIMIT {int(num_results)})
+            -- Coordinates too, so the live search map can place each Facility as it is found.
+            SELECT ranked.*, f.latitude, f.longitude FROM ranked JOIN {APP['facilities']} f USING (unique_id)
+            ORDER BY similarity DESC""",
             service=service,
             cells=json.dumps(cells),
         )
