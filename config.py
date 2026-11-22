@@ -40,7 +40,12 @@ SILVER_STAGE3 = {
     "facilities": _out("silver", "facilities_stage3"),
     "rule_counts": _out("silver", "stage3_rule_counts"),
 }
-GOLD = {}  # add gold tables here as the analysis takes shape, e.g. GOLD["facilities_by_district"] = _out("gold", "facilities_by_district")
+# Gold (spec #37): one row per Facility with its confidence score, and one row per claim.
+# Built from Silver Stage 3.
+GOLD = {
+    "facilities": _out("gold", "facilities"),
+    "facility_items": _out("gold", "facility_items"),
+}
 
 # Care finder app (spec #26). The app reads one source Facilities table; swap
 # APP_SOURCE_FACILITIES to the Gold table once it exists (a one-line change).

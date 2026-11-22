@@ -7,6 +7,10 @@ a time. It takes the IO as two functions, so the loop is tested with fakes:
   each hit has `item_id`, `unique_id`, `item_type`, `item_text`, `h3_r5`, `similarity`.
 - `label_hits(hits) -> (labels, info)`: `{item_id: {label, reason}}` for the hits,
   plus `{cache_hits, llm_calls, fallback_used}`.
+
+`on_event`, if given, is called as the search runs, so the app can draw it live:
+`band` (a round starts: its cells), `found` (the Facilities with a similar claim)
+and `checked` (each found Facility's best label, or None when ruled out).
 """
 
 import math
@@ -40,8 +44,10 @@ def expanding_search(
     search_band: Callable[[list[str]], list[dict]],
     label_hits: Callable[[list[dict]], tuple[dict, dict]],
     settings: Settings = DEFAULT,
+    on_event: Callable[[dict], None] | None = None,
 ) -> dict:
     """Labelled hits from every round, plus the search extent and per-round details."""
+    emit = _safe(on_event)
     start = h3.latlng_to_cell(lat, lon, settings.h3_resolution)
     searched: set[str] = set()
     hits: dict[str, dict] = {}
@@ -50,18 +56,25 @@ def expanding_search(
     for k in k_steps(settings):
         band = sorted(set(h3.grid_disk(start, k)) - searched)
         searched.update(band)
+        n = len(rounds) + 1
+        emit({"type": "band", "round": n, "k": k, "radius_km": radius_km(k, settings), "cells": band})
         found = [h for h in search_band(band) if h["item_id"] not in hits]
+        candidates = _candidates(found)
+        emit({"type": "found", "round": n, "candidates": candidates, "hits": len(found)})
         kept = [h for h in found if h["similarity"] >= settings.min_similarity]
         labels, info = label_hits(kept) if kept else ({}, {"cache_hits": 0, "llm_calls": 0, "fallback_used": False})
         for hit in kept:
             if hit["item_id"] in labels:
-                hits[hit["item_id"]] = {**hit, **labels[hit["item_id"]], "round": len(rounds) + 1}
+                hits[hit["item_id"]] = {**hit, **labels[hit["item_id"]], "round": n}
         direct = direct_facilities(hits.values())
+        best = best_labels(h for h in hits.values() if h["round"] == n)
+        emit({"type": "checked", "round": n, "labels": {c["unique_id"]: best.get(c["unique_id"]) for c in candidates}, "direct_so_far": len(direct)})
         rounds.append(
             {
                 "k": k,
                 "radius_km": radius_km(k, settings),
                 "cells": band,
+                "candidates": candidates,
                 "hits_found": len(found),
                 "hits_kept": len(kept),
                 "facilities_checked": sorted({h["unique_id"] for h in kept}),
@@ -85,3 +98,39 @@ def expanding_search(
 
 def direct_facilities(hits) -> set[str]:
     return {h["unique_id"] for h in hits if h.get("label") == "direct"}
+
+
+def best_labels(hits) -> dict[str, str]:
+    """Each Facility's best label among its hits: direct over related; unrelated is left out."""
+    best: dict[str, str] = {}
+    for hit in hits:
+        if hit.get("label") == "direct" or (hit.get("label") == "related" and best.get(hit["unique_id"]) != "direct"):
+            best[hit["unique_id"]] = hit["label"]
+    return best
+
+
+def _candidates(found: list[dict]) -> list[dict]:
+    """One point per Facility with a hit: its coordinates, or its cell's centre when the search didn't return them."""
+    points = {}
+    for hit in found:
+        if hit["unique_id"] in points:
+            continue
+        lat, lon = hit.get("latitude"), hit.get("longitude")
+        if lat is None or lon is None:
+            lat, lon = h3.cell_to_latlng(hit["h3_r5"])
+        points[hit["unique_id"]] = {"unique_id": hit["unique_id"], "lat": lat, "lon": lon}
+    return list(points.values())
+
+
+def _safe(callback):
+    """The callback, with its errors swallowed: drawing the search must never break it."""
+
+    def call(event: dict) -> None:
+        if callback is None:
+            return
+        try:
+            callback(event)
+        except Exception:
+            pass
+
+    return call

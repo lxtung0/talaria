@@ -18,7 +18,7 @@ APP = str(Path(__file__).parent.parent / "app" / "app.py")
 def run_app(monkeypatch):
     def run(fake, service, location, urgency="Planned"):
         monkeypatch.setattr(backend_module, "DatabricksBackend", lambda: fake)
-        monkeypatch.setattr(search_map, "FRAME_SECONDS", 0)
+        monkeypatch.setattr(search_map, "STEP_SECONDS", 0)
         st.cache_data.clear()
         st.cache_resource.clear()
         at = AppTest.from_file(APP, default_timeout=30)
@@ -85,7 +85,7 @@ def test_unknown_location_is_a_clear_error(run_app):
     assert 'No PIN, district or city called "Atlantis" was found.' in _texts(at)
 
 
-def test_search_map_replays_rounds_and_scrubs_with_the_slider(run_app):
+def test_search_map_ends_on_the_final_view_and_scrubs_and_replays(run_app):
     (lat, lon), = ring_points(3, 1)
     fake = FakeBackend([facility_at(lat, lon, "f")], {"f": ("equipment", "Dialysis unit", 0.95)})
 
@@ -93,9 +93,22 @@ def test_search_map_replays_rounds_and_scrubs_with_the_slider(run_app):
 
     slider = at.slider(key="round_slider")
     assert slider.value == 10 and slider.max == 10
-    assert "Round 10 · " in _texts(at) and "1 direct match so far" in _texts(at)
+    assert "Done after 10 rounds" in _texts(at) and "1. Hospital f" in _texts(at)
+    slider.set_value(3).run()
+    assert "Round 3 · 1 confirmed, 0 related, 0 ruled out · 1 confirmed so far" in _texts(at)
     slider.set_value(2).run()
-    assert "Round 2 · " in _texts(at) and "0 direct matches so far" in _texts(at)
-    at.button[1].click().run()  # Replay search
+    assert "Round 2 · 0 confirmed, 0 related, 0 ruled out · 0 confirmed so far" in _texts(at)
+    next(b for b in at.button if b.label == "Replay search").click().run()
     assert not at.exception
-    assert at.slider(key="round_slider").value == 10
+    assert "Done after 10 rounds" in _texts(at)
+
+
+def test_the_map_is_reset_for_an_ambiguous_location(run_app):
+    class Ambiguous(FakeBackend):
+        def district_places(self, name, state):
+            return [Place("Aurangabad, Bihar", "district", 24.7, 84.3, "BIHAR"), Place("Aurangabad, Maharashtra", "district", 19.9, 75.3, "MAHARASHTRA")]
+
+    at = run_app(Ambiguous([], {}), "MRI", "Aurangabad")
+
+    assert "Round 1" not in _texts(at) and "Done after" not in _texts(at)
+    assert at.radio[0].label == "Did you mean…"

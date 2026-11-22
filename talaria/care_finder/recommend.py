@@ -7,18 +7,22 @@ here is plain Python, so the flow is tested with a fake backend.
 from talaria.care_finder import labels as labels_mod
 from talaria.care_finder import reasons, scoring
 from talaria.care_finder.location import LocationError, Place, choose_location, parse_location
-from talaria.care_finder.search import direct_facilities, expanding_search
+from talaria.care_finder.search import best_labels, direct_facilities, expanding_search
 from talaria.care_finder.settings import DEFAULT, Settings
 
 URGENCIES = ("emergency", "planned")
 ADDRESS_COLUMNS = ["address_line1", "address_line2", "address_line3", "address_city", "address_state", "address_pincode"]
 
 
-def recommend(service: str, location: str, urgency: str = "planned", *, backend=None, settings: Settings = DEFAULT) -> dict:
+def recommend(
+    service: str, location: str, urgency: str = "planned", *, backend=None, settings: Settings = DEFAULT, on_progress=None
+) -> dict:
     """The best Facilities for `service` near `location`, with their evidence.
 
     `status` is `ok` (results, possibly empty), `ambiguous` (`candidates` to choose
     from, each usable as a new `location`) or `error` (`error` is shown to the user).
+    `on_progress(event)` is called as the search runs: `located`, then each round's
+    `band`, `found` and `checked` (see `search.expanding_search`), for the live map.
     """
     if backend is None:
         from talaria.care_finder.backend import DatabricksBackend
@@ -37,6 +41,12 @@ def recommend(service: str, location: str, urgency: str = "planned", *, backend=
     if isinstance(place, list):
         return {**base, "status": "ambiguous", "candidates": [p.label for p in place]}
 
+    if on_progress is not None:
+        try:
+            on_progress({"type": "located", "label": place.label, "lat": place.lat, "lon": place.lon})
+        except Exception:
+            pass  # drawing the search must never break it
+
     service_key = labels_mod.normalize_service(service)
     cache = backend.cached_labels(service_key)
     new_labels: dict[str, dict] = {}
@@ -47,7 +57,7 @@ def recommend(service: str, location: str, urgency: str = "planned", *, backend=
     def label_hits(hits):
         return _label_hits(service, hits, cache, new_labels, backend, settings)
 
-    found = expanding_search(place.lat, place.lon, search_band, label_hits, settings)
+    found = expanding_search(place.lat, place.lon, search_band, label_hits, settings, on_progress)
     if new_labels:
         backend.save_labels(service_key, new_labels)
 
@@ -70,25 +80,27 @@ def recommend(service: str, location: str, urgency: str = "planned", *, backend=
             "direct_facilities": len(direct_facilities(found["hits"])),
         },
         "rounds": map_rounds(found["rounds"], found["hits"], facilities),
-        "round_details": [{k: v for k, v in r.items() if k not in ("cells", "facilities_checked")} for r in found["rounds"]],
+        "round_details": [{k: v for k, v in r.items() if k not in ("cells", "candidates", "facilities_checked")} for r in found["rounds"]],
     }
 
 
 def map_rounds(rounds: list[dict], hits: list[dict], facilities: dict) -> list[dict]:
-    """Per round, for the search map: `k`, the new H3 cells, and each Facility checked with its best label."""
-    best: dict[str, str] = {}
-    for hit in hits:
-        if hit["label"] == "direct" or (hit["label"] == "related" and best.get(hit["unique_id"]) != "direct"):
-            best[hit["unique_id"]] = hit["label"]
+    """Per round, for the search map: `k`, the new H3 cells, and every Facility found in it
+    with its best label (None when it was ruled out)."""
+    best = best_labels(hits)
     return [
         {
             "k": r["k"],
             "radius_km": r["radius_km"],
             "cells": r["cells"],
             "facilities": [
-                {"unique_id": uid, "lat": facilities[uid]["latitude"], "lon": facilities[uid]["longitude"], "label": best.get(uid)}
-                for uid in r["facilities_checked"]
-                if uid in facilities
+                {
+                    "unique_id": c["unique_id"],
+                    "lat": facilities[c["unique_id"]]["latitude"] if c["unique_id"] in facilities else c["lat"],
+                    "lon": facilities[c["unique_id"]]["longitude"] if c["unique_id"] in facilities else c["lon"],
+                    "label": best.get(c["unique_id"]),
+                }
+                for c in r["candidates"]
             ],
         }
         for r in rounds

@@ -1,4 +1,4 @@
-from config import SILVER, SILVER_BASE, SILVER_FACILITY_DISTRICTS, SILVER_STAGE3
+from config import GOLD, SILVER, SILVER_BASE, SILVER_FACILITY_DISTRICTS, SILVER_STAGE3
 
 
 def test_silver_base_facilities_has_its_own_table_name():
@@ -28,3 +28,10 @@ def test_silver_nfhs5_has_its_own_table_name():
 
 def test_facility_districts_has_its_own_table_name():
     assert SILVER_FACILITY_DISTRICTS == "workspace.talaria.silver_facility_districts"
+
+
+def test_gold_tables_have_their_own_names():
+    assert GOLD == {
+        "facilities": "workspace.talaria.gold_facilities",
+        "facility_items": "workspace.talaria.gold_facility_items",
+    }
