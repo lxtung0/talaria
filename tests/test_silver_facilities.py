@@ -41,6 +41,8 @@ def test_adds_only_the_flag_columns(make_silver_inputs, no_pincodes):
     facilities = build_silver_facilities(silver_base, bronze, no_pincodes, RUN_DATE)
 
     assert facilities.dtypes[len(silver_base.columns) :] == [
+        ("flag_specialty_unsupported_by_capability", "boolean"),
+        ("flag_desc_mentions_other_state", "boolean"),
         ("flag_page_update_unparsable", "boolean"),
         ("flag_future_page_update", "boolean"),
     ]

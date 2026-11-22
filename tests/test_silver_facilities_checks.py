@@ -105,4 +105,6 @@ def test_counts_true_and_false_per_flag(tables):
 
     assert counts["flag_page_update_unparsable"] == {"true": 1, "false": 1}
     assert counts["flag_future_page_update"] == {"true": 0, "false": 2}
+    assert counts["flag_specialty_unsupported_by_capability"] == {"true": 0, "false": 2}
+    assert counts["flag_desc_mentions_other_state"] == {"true": 0, "false": 2}
     assert "flag_page_update_unparsable" in format_flag_counts(counts)

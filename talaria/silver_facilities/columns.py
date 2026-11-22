@@ -20,6 +20,10 @@ class NewColumn:
 
 
 NEW_COLUMNS = [
+    # C. Specialty consistency.
+    NewColumn("flag_specialty_unsupported_by_capability", "C"),
+    # D. Description consistency.
+    NewColumn("flag_desc_mentions_other_state", "D"),
     # G. Page update date.
     NewColumn("flag_page_update_unparsable", "G"),
     NewColumn("flag_future_page_update", "G"),
