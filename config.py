@@ -49,7 +49,7 @@ GOLD = {
 # Gold supplies which Facilities are in scope and their confidence score and log.
 # Gold alone can't be the source: it has no claim lists or flags.
 APP_SOURCE_FACILITIES = SILVER["facilities"]
-APP_CONFIDENCE_SOURCE = _out("gold", "facilities")
+APP_CONFIDENCE_SOURCE = GOLD["facilities"]
 APP = {
     "facilities": _out("app", "facilities"),
     "facility_items": _out("app", "facility_items"),
