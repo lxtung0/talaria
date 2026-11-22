@@ -1,0 +1,9 @@
+service,procedure_regex,equipment_regex,check_forward,check_reverse
+Dialysis,(?i)dialys,(?i)dialys|\bro plant|reverse osmosis,True,True
+MRI scan,(?i)\bmri\b,(?i)\bmri\b|magnetic resonance,True,True
+CT scan,(?i)\bct\b|computed tomograph,(?i)\bct\b|computed tomograph,True,True
+Angiography/angioplasty,(?i)angiograph|angioplast|\bptca\b|stent,(?i)cath ?lab|catheteri[sz]ation|angiograph|\bdsa\b|c-arm,True,True
+Cataract surgery,(?i)cataract|phaco,(?i)phaco|operating microscope|microscope|slit.?lamp|\bot\b|operation theat,True,False
+Endoscopy,(?i)endoscop|colonoscop|\bercp\b,(?i)endoscop|colonoscop|gastroscop|video ?scope,True,False
+Phototherapy (newborn),(?i)phototherap,(?i)phototherap|\bnicu\b,True,True
+Radiotherapy,(?i)radiotherap|radiation therap|\bimrt\b|brachy,(?i)linac|linear accelerator|brachy|tomotherap|cobalt|radiotherap,True,True

@@ -1,0 +1,11 @@
+unit,capability_regex,supporting_categories
+NICU,(?i)\bnicu\b|neonatal intensive|\bsncu\b|special newborn care,Neonatology / NICU|Pediatrics (general)
+PICU,(?i)\bpicu\b|paediatric intensive|pediatric intensive,Pediatrics (general)|Neonatology / NICU|Critical Care / ICU
+Dialysis Unit,(?i)dialys,Nephrology & Dialysis|Urology|Transplant
+Cath Lab,(?i)cath ?lab|catheteri[sz]ation lab,Cardiology|Cardiac Surgery
+Cardiac Surgery Unit,(?i)cardiac surg|cardiothoracic|\bcabg\b|bypass surg|open heart|valve replacement,Cardiac Surgery|Cardiology
+Burn Unit,(?i)burns? (unit|ward|care|cent|icu),Burns & Plastic Surgery|Dermatology
+Radiotherapy,(?i)radiotherap|radiation therap|linac|linear accelerator|brachytherap|tomotherap,Oncology & Hematology
+Chemotherapy / Oncology Unit,(?i)chemotherap|day care onco|oncology (unit|ward|cent),Oncology & Hematology
+Maternity / Labour Room,(?i)labou?r room|labou?r ward|maternity|delivery (room|suite|ward)|obstetric (unit|ward)|birthing,Obstetrics & Gynecology|Fertility / IVF|Neonatology / NICU
+Emergency C-section,(?i)caesar|cesar|c-section|\blscs\b,Obstetrics & Gynecology|Fertility / IVF
