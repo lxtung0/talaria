@@ -175,13 +175,16 @@ def card(result: dict, position: int) -> None:
             if result.get("confidence_reasons"):
                 st.markdown("**Record confidence, from Gold**")
                 st.code("\n".join(result["confidence_reasons"]), language=None)
-            st.json({k: answer["settings"][k] for k in ("min_direct_facilities", "max_k", "min_similarity", "type_weights", "label_values")}, expanded=False)
+            st.json({k: answer["settings"][k] for k in ("min_direct_facilities", "max_k", "desert_k", "min_similarity", "type_weights", "label_values")}, expanded=False)
 
 
 top, others = answer["top"], answer["others"]
 with left:
     if not answer["evidence_checked"]:
         st.warning(present.NOT_CHECKED, icon="⚠️")
+    if alert := present.desert_alert(answer):
+        st.error(alert, icon="🚩")
+        st.caption(present.DESERT_CAVEAT)
     (st.info if top and top[0]["evidence_band"] == "strong" else st.warning)(present.summary(answer))
     st.caption(present.search_extent(answer))
 

@@ -6,6 +6,7 @@ here is plain Python, so the flow is tested with a fake backend.
 
 from talaria.care_finder import labels as labels_mod
 from talaria.care_finder import reasons, scoring
+from talaria.care_finder.desert import desert_check
 from talaria.care_finder.location import LocationError, Place, choose_location, parse_location
 from talaria.care_finder.search import best_labels, direct_facilities, expanding_search
 from talaria.care_finder.settings import DEFAULT, Settings
@@ -76,6 +77,7 @@ def recommend(
         "top": results[: settings.top_n],
         "others": results[settings.top_n : settings.top_n + settings.others_n],
         "evidence_checked": not found["fallback_used"],
+        "desert": desert_check(found, results, urgency, settings),
         "search": {
             "searched_k": found["searched_k"],
             "searched_radius_km": found["searched_radius_km"],

@@ -12,6 +12,10 @@ class Settings:
     small_k_limit: int = 4  # grow k by 1 up to here,
     large_k_step: int = 2  # then by this much
 
+    # Healthcare desert alert (#46): more rings than this to the nearest `direct`
+    # Facility is a possible desert. Placeholders: about 44 km and 112 km.
+    desert_k: dict = field(default_factory=lambda: {"emergency": 2, "planned": 6})
+
     # Vector Search and the LLM check.
     results_per_round: int = 75
     # Similarity is cosine on databricks-gte-large-en embeddings. Measured on the data:

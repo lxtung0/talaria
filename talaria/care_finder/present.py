@@ -88,6 +88,28 @@ def summary(answer: dict) -> str:
     return f"{len(strong)} of these {len(top)} facilities {verb} strong evidence for {service}, searched up to about {radius:.0f} km from {place}."
 
 
+DESERT_CAVEAT = (
+    "This is a gap in this dataset, which may not list every facility. Confirm locally before acting on it."
+)
+
+
+def desert_alert(answer: dict) -> str | None:
+    """The healthcare desert alert (#46), or None when the service was found close enough."""
+    d = answer.get("desert")
+    if not d or not d["is_desert"]:
+        return None
+    service, place, urgency = answer["service"], answer["location"]["label"], answer["urgency"]
+    rings = "ring" if d["threshold_k"] == 1 else "rings"
+    text = (
+        f"Possible healthcare desert: no facility says it offers {service} within {d['threshold_k']} map {rings} "
+        f"(about {d['threshold_km']:.0f} km) of {place}, the limit for {urgency} care."
+    )
+    if d["rings_needed"] is None:
+        return text + f" None was found within about {answer['search']['searched_radius_km']:.0f} km."
+    nearest = f"{d['nearest_direct_km']:.0f} km away, " if d["nearest_direct_km"] is not None else ""
+    return text + f" The nearest that does is {nearest}{d['rings_needed']} rings out."
+
+
 def search_extent(answer: dict) -> str:
     s = answer["search"]
     why = "enough strong matches were found" if s["stop_reason"] == "enough matches" else "it reached the maximum distance"
