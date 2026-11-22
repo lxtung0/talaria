@@ -13,6 +13,8 @@ from talaria.silver_facilities import words
 from talaria.silver_facilities.specialty_synonyms import SPECIALTY_GROUPS
 
 _TEXT = "_specialty_capability_text"
+# Between sentences. The `|` stops a term's spaces (which match any whitespace) from spanning two.
+_SENTENCE_BREAK = "\n|\n"
 _TRUNCATED = ["specialties", "capability"]
 
 
@@ -41,7 +43,7 @@ def add_columns(df: DataFrame) -> DataFrame:
 
     unsupported = ~F.exists(F.col("specialties"), backed)
     return (
-        df.withColumn(_TEXT, F.lower(F.array_join(F.col("capability"), "\n")))
+        df.withColumn(_TEXT, F.lower(F.array_join(F.col("capability"), _SENTENCE_BREAK)))
         .withColumns(hits)
         .withColumn("flag_specialty_unsupported_by_capability", F.when(checkable, unsupported).otherwise(F.lit(False)))
         .drop(_TEXT, *hits)

@@ -40,6 +40,7 @@ SPECIALTY = {
     "generic word is no synonym": (["cardiology"], ["Heart care available"], True),
     "short synonym is a whole word": (["ent"], ["Entire team on call"], True),
     "synonym must start a word": (["urology"], ["Neurology ward"], True),
+    "synonym split over two sentences": (["geriatrics"], ["Care is general", "Medicine shop on site"], True),
     "another group's synonym": (["dentistry"], ["Eye care clinic", "Ophthalmology services"], True),
 }
 
