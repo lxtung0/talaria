@@ -48,7 +48,7 @@ APP_VS_INDEX = f"{OUTPUT_CATALOG}.{OUTPUT_SCHEMA}.app_facility_items_index"
 APP_EMBEDDING_MODEL = "databricks-gte-large-en"
 # "vector_search" (the index) or "delta" (the fallback: an `embedding` column on
 # app_facility_items, searched in SQL), if Free Edition refuses the endpoint or index.
-APP_SEARCH_PATH = "vector_search"
+APP_SEARCH_PATH = "delta"
 APP_CHAT_MODEL = "databricks-meta-llama-3-3-70b-instruct"
 APP_WAREHOUSE_ID = "3a60f8ef7e0a6731"  # Serverless Starter Warehouse
 APP_NAME = "talaria-care-finder"
