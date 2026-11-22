@@ -390,3 +390,55 @@ def test_checks_fail_when_a_flag_is_null(stage3):
 
     with pytest.raises(ValueError, match="flag_partial: 1 row\\(s\\) with a NULL flag"):
         check_silver_stage3(facilities, result.withColumn("flag_partial", F.lit(None).cast("boolean")))
+
+
+# evidence_items. (bronze row) -> the cited (rule, field, item, subject), or None.
+EVIDENCE = {
+    "C2 procedure without equipment": (
+        dict(specialties=["nephrology"], procedure=["Hemodialysis"], equipment=["X-ray machine"]),
+        [("C2", "procedure", "Hemodialysis", "Dialysis")],
+    ),
+    "C2 equipment without procedure": (
+        dict(specialties=["nephrology"], procedure=["Hemodialysis", "Physiotherapy"],
+             equipment=["Dialysis machine", "MRI 1.5T"]),
+        [("C2", "equipment", "MRI 1.5T", "MRI scan")],
+    ),
+    "C3 the unbacked specialty code": (
+        dict(specialties=["cardiology", "nephrology"], procedure=["Echocardiography"]),
+        [("C3", "specialties", "nephrology", "Nephrology & Dialysis")],
+    ),
+    "C3 and C4 together": (
+        dict(specialties=["cardiology"], capability=["24x7 dialysis unit", "Parking"]),
+        [("C3", "specialties", "cardiology", "Cardiology"),
+         ("C4", "capability", "24x7 dialysis unit", "Dialysis Unit")],
+    ),
+    "C5 specific procedures only": (
+        dict(specialties=["ophthalmology"], procedure=["Knee replacement", "Blood test"]),
+        [("C3", "specialties", "ophthalmology", "Ophthalmology"),
+         ("C5", "procedure", "Knee replacement", "Orthopedics")],
+    ),
+    "no flag, no evidence": (dict(specialties=["cardiology"], procedure=["ECG"]), None),
+}
+
+
+def test_evidence_items_cite_the_facility_text(build):
+    rows = build(*[bronze_row(case, **row) for case, (row, _) in EVIDENCE.items()])
+
+    def cited(row):
+        items = row.evidence_items
+        return None if items is None else sorted((e.rule, e.field, e.item, e.subject) for e in items)
+
+    assert {case: cited(rows[case]) for case in EVIDENCE} == {
+        case: None if expected is None else sorted(expected) for case, (_, expected) in EVIDENCE.items()
+    }
+
+
+def test_checks_fail_when_a_flag_has_no_evidence(stage3):
+    facilities, result = stage3(
+        bronze_row("facility-1", specialties=["nephrology"], procedure=["Hemodialysis"], equipment=["X-ray"])
+    )
+
+    no_evidence = F.lit(None).cast(result.schema["evidence_items"].dataType)
+
+    with pytest.raises(ValueError, match="1 row\\(s\\) with flag_partial but no C2 evidence"):
+        check_silver_stage3(facilities, result.withColumn("evidence_items", no_evidence))
