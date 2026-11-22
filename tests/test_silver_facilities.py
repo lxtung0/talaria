@@ -41,6 +41,10 @@ def test_adds_only_the_flag_columns(make_silver_inputs, no_pincodes):
     facilities = build_silver_facilities(silver_base, bronze, no_pincodes, RUN_DATE)
 
     assert facilities.dtypes[len(silver_base.columns) :] == [
+        ("flag_has_government_source", "boolean"),
+        ("flag_own_site_in_sources", "boolean"),
+        ("flag_only_directory_sources", "boolean"),
+        ("flag_single_source_domain", "boolean"),
         ("flag_page_update_unparsable", "boolean"),
         ("flag_future_page_update", "boolean"),
         ("flag_coords_far_from_written_pin", "boolean"),

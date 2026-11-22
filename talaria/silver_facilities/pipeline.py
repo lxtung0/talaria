@@ -8,7 +8,7 @@ import datetime
 
 from pyspark.sql import DataFrame
 
-from talaria.silver_facilities import columns, location, page_dates
+from talaria.silver_facilities import columns, location, page_dates, sources
 
 
 def build_silver_facilities(
@@ -21,6 +21,7 @@ def build_silver_facilities(
     page date must be after to count as in the future.
     """
     df = silver_base
+    df = sources.add_columns(df)
     df = page_dates.add_columns(df, run_date)
     df = location.add_columns(df, pincodes)
     # Only listed columns leave the function, so a group's working columns are never stored.

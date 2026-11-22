@@ -20,6 +20,11 @@ class NewColumn:
 
 
 NEW_COLUMNS = [
+    # F. Source quality.
+    NewColumn("flag_has_government_source", "F"),
+    NewColumn("flag_own_site_in_sources", "F"),
+    NewColumn("flag_only_directory_sources", "F"),
+    NewColumn("flag_single_source_domain", "F"),
     # G. Page update date.
     NewColumn("flag_page_update_unparsable", "G"),
     NewColumn("flag_future_page_update", "G"),
