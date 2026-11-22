@@ -11,6 +11,7 @@ _BOOLS = ["flag_has_government_source", "flag_coords_shared", "needs_investigati
 _STRINGS = [
     "unique_id", "name", "facility_type", "address_line1", "address_line2", "address_line3",
     "address_city", "address_state", "address_pincode", "official_phone", "official_website", "description",
+    "operator_type", "primary_affiliation",
 ]
 SOURCE_SCHEMA = T.StructType(
     [T.StructField(c, T.StringType()) for c in _STRINGS]
@@ -152,3 +153,19 @@ def test_without_gold_the_confidence_log_is_empty(make_source):
     facilities, _ = build_app_tables(make_source({"unique_id": "f1"}))
 
     assert facilities.collect()[0].confidence_reasons is None
+
+
+def test_affordability_takes_the_first_tier_a_facility_meets(make_source):
+    source = make_source(
+        {"unique_id": "gov", "primary_affiliation": "government", "operator_type": "public"},
+        {"unique_id": "faith", "primary_affiliation": "faith-tradition", "operator_type": "private"},
+        {"unique_id": "free", "operator_type": "private", "description": "We offer free treatment to the poor."},
+        {"unique_id": "public", "operator_type": "public", "primary_affiliation": "academic"},
+        {"unique_id": "private", "operator_type": "private", "description": "Free Wi-Fi in the lobby."},
+    )
+
+    facilities, _ = build_app_tables(source)
+
+    assert {r.unique_id: r.affordability for r in facilities.collect()} == {
+        "gov": "government", "faith": "charitable", "free": "charitable", "public": "public", "private": None,
+    }

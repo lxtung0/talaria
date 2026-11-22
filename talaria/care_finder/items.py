@@ -32,6 +32,15 @@ LIST_ITEMS = [
 DESCRIPTION_TYPE, DESCRIPTION_LETTER = "description_sentence", "d"
 ITEM_TYPES = [item_type for _, item_type, _ in LIST_ITEMS] + [DESCRIPTION_TYPE]
 
+# Free or low-cost care, best first: `affordability` is the first tier a Facility meets.
+# government: its main affiliation is government; charitable: philanthropic, faith or
+# community, or its description offers free or charitable treatment; public: a public operator.
+CHARITABLE_AFFILIATIONS = ["philanthropy-legacy", "faith-tradition", "community"]
+FREE_CARE_TEXT = (
+    r"(?i)\b(free (of cost )?(treatment|medical|consultation|surgery|surgeries|care|medicines?|check-?ups?|camps?)"
+    r"|charitable|not[- ]for[- ]profit|non[- ]profit)\b"
+)
+
 # A sentence ends at `.`, `!` or `?` followed by whitespace; the mark stays with
 # its sentence, so each sentence is a verbatim slice of the description.
 SENTENCE_BREAK = r"(?<=[.!?])\s+"
@@ -58,7 +67,25 @@ def _app_facilities(facilities: DataFrame) -> DataFrame:
         else F.lit(None).cast("array<string>")
     )
     return facilities.select(
-        *SHOWN_COLUMNS, *flags, *QUALITY_COLUMNS, confidence.alias("confidence_score"), reasons.alias("confidence_reasons")
+        *SHOWN_COLUMNS,
+        *flags,
+        *QUALITY_COLUMNS,
+        confidence.alias("confidence_score"),
+        reasons.alias("confidence_reasons"),
+        _affordability(facilities.columns).alias("affordability"),
+    )
+
+
+def _affordability(columns: list[str]):
+    """`government`, `charitable` or `public` (see `CHARITABLE_AFFILIATIONS`), else NULL."""
+    def column(name):
+        return F.col(name) if name in columns else F.lit(None).cast("string")
+
+    affiliation, operator, description = column("primary_affiliation"), column("operator_type"), column("description")
+    return (
+        F.when(affiliation == "government", F.lit("government"))
+        .when(affiliation.isin(CHARITABLE_AFFILIATIONS) | description.rlike(FREE_CARE_TEXT), F.lit("charitable"))
+        .when(operator == "public", F.lit("public"))
     )
 
 

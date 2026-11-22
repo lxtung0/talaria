@@ -112,11 +112,14 @@ def other_line(result: dict, last_top: dict | None) -> str:
 def formula_text(answer: dict) -> str:
     s = answer["settings"]
     d0 = s["distance_decay_km"][answer["urgency"]]
+    tiers = ", ".join(f"{tier} {value:g}" for tier, value in s["affordability_values"].items())
     return (
         "hit value = label value × type weight; only the best "
         f"{s['hits_per_type']} hits of each type count\n"
         "service evidence = 1 − Π(1 − hit value)\n"
-        f"rank = service evidence × (0.5 + 0.5 × confidence) × exp(−distance / {d0:.0f} km)"
+        f"rank = service evidence × (0.5 + 0.5 × confidence) × exp(−distance / {d0:.0f} km) × affordability\n"
+        f"affordability = 1 + {s['affordability_max_boost']} × tier × share of households uninsured here "
+        f"({tiers}, other 0)"
     )
 
 
@@ -125,5 +128,6 @@ def score_parts(result: dict) -> list[dict]:
         {"part": "Service evidence", "value": result["service_evidence"], "band": result["evidence_band"]},
         {"part": "Record confidence", "value": result["confidence_score"], "band": result["confidence_band"]},
         {"part": "Distance factor", "value": result["distance_factor"], "band": f"{result['distance_km']:.1f} km"},
+        {"part": "Affordability factor", "value": result["affordability_factor"], "band": result["affordability"] or "—"},
         {"part": "Rank", "value": result["rank"], "band": ""},
     ]

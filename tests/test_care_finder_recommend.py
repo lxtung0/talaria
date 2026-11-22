@@ -18,7 +18,8 @@ def facility_at(lat, lon, unique_id, **flags):
 class FakeBackend:
     """Facilities at fixed points, each with one claim; labels come from `llm_labels`."""
 
-    def __init__(self, facilities, texts, llm_labels=None, llm_fails=False):
+    def __init__(self, facilities, texts, llm_labels=None, llm_fails=False, area=None):
+        self.area_row = area  # what `area()` returns; an Exception instance is raised
         self.facilities_by_id = {f["unique_id"]: f for f in facilities}
         self.texts = texts  # unique_id -> (item_type, item_text, similarity)
         self.llm_labels = llm_labels or {}
@@ -64,6 +65,11 @@ class FakeBackend:
 
     def facilities(self, ids):
         return [self.facilities_by_id[i] for i in ids]
+
+    def area(self, lat, lon):
+        if isinstance(self.area_row, Exception):
+            raise self.area_row
+        return self.area_row
 
 
 def ring_points(k_cells_away, count, start=PATNA):
@@ -315,3 +321,47 @@ def test_a_broken_progress_callback_does_not_break_the_search():
     result = recommend("dialysis", "Patna", backend=backend, on_progress=broken)
 
     assert result["status"] == "ok" and [r["unique_id"] for r in result["top"]] == ["f"]
+
+
+def _same_place_pair(**second):
+    """Two Facilities at one point with the same claim; the second gets `second`'s columns."""
+    lat, lon = PATNA
+    facilities = [facility_at(lat, lon, "private"), facility_at(lat, lon, "free", **second)]
+    texts = {uid: ("equipment", "Dialysis unit", 0.95) for uid in ("private", "free")}
+    return facilities, texts
+
+
+def test_a_government_facility_ranks_a_little_higher_where_few_households_are_insured():
+    facilities, texts = _same_place_pair(affordability="government")
+    area = {"nfhs_state": "Bihar", "nfhs_district": "Patna", "insurance_pct": 20.0}
+
+    result = recommend("dialysis", "Patna", backend=FakeBackend(facilities, texts, area=area))
+
+    free, private = result["top"]
+    assert (free["unique_id"], private["unique_id"]) == ("free", "private")
+    assert free["affordability_factor"] == 1.12  # 1 + 0.15 × 1.0 × 0.8
+    assert private["affordability_factor"] == 1.0
+    assert free["rank"] == round(private["rank"] * 1.12, 4)
+    assert result["area"] == area and result["uninsured_share"] == 0.8
+
+
+def test_tiers_rank_government_then_charitable_then_public():
+    lat, lon = PATNA
+    tiers = ["public", "charitable", "government", None]
+    facilities = [facility_at(lat, lon, f"f{i}", affordability=t) for i, t in enumerate(tiers)]
+    texts = {f"f{i}": ("equipment", "Dialysis unit", 0.95) for i in range(len(tiers))}
+
+    result = recommend("dialysis", "Patna", backend=FakeBackend(facilities, texts, area={"insurance_pct": 50.0}))
+
+    assert [r["affordability"] for r in result["top"] + result["others"]] == ["government", "charitable", "public", None]
+
+
+def test_without_an_area_figure_the_national_uninsured_share_is_used():
+    facilities, texts = _same_place_pair(affordability="government")
+
+    for area in (None, TimeoutError("warehouse down")):
+        result = recommend("dialysis", "Patna", backend=FakeBackend(facilities, texts, area=area))
+
+        assert result["status"] == "ok" and result["area"] is None
+        assert result["uninsured_share"] == 0.59
+        assert result["top"][0]["affordability_factor"] == round(1 + 0.15 * 0.59, 3)

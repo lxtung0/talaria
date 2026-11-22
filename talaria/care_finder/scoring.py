@@ -50,8 +50,22 @@ def distance_decay(distance_km: float, urgency: str, settings: Settings = DEFAUL
     return math.exp(-distance_km / d0)
 
 
-def rank_score(evidence: float, confidence: float, distance_km: float, urgency: str, settings: Settings = DEFAULT) -> float:
-    return evidence * (0.5 + 0.5 * confidence) * distance_decay(distance_km, urgency, settings)
+def uninsured_share(insurance_pct: float | None, settings: Settings = DEFAULT) -> float:
+    """The share of households without insurance; the national figure when the area has none."""
+    if insurance_pct is None:
+        return settings.uninsured_share_default
+    return min(max(1.0 - insurance_pct / 100.0, 0.0), 1.0)
+
+
+def affordability_factor(tier: str | None, uninsured: float, settings: Settings = DEFAULT) -> float:
+    """1 for a Facility with no free or low-cost tier; up to 1 + `affordability_max_boost`."""
+    return 1.0 + settings.affordability_max_boost * settings.affordability_values.get(tier, 0.0) * uninsured
+
+
+def rank_score(
+    evidence: float, confidence: float, distance_km: float, urgency: str, settings: Settings = DEFAULT, affordability: float = 1.0
+) -> float:
+    return evidence * (0.5 + 0.5 * confidence) * distance_decay(distance_km, urgency, settings) * affordability
 
 
 def evidence_band(evidence: float, settings: Settings = DEFAULT) -> str:
