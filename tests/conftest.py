@@ -2,16 +2,12 @@
 
 import datetime
 import itertools
-import os
 
 import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql import types as T
 
 from talaria.silver_base import build_silver_base
-
-# Tests never send MLflow traces; tests/test_care_finder_tracing.py fakes the tracer.
-os.environ.setdefault("TALARIA_TRACING", "0")
 
 # Bronze facilities schema: the source `facilities` table (every column is text
 # apart from latitude/longitude) plus the two columns the bronze ingest adds.

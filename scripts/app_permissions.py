@@ -4,7 +4,6 @@
 - Unity Catalog grants: USE CATALOG / USE SCHEMA; SELECT on the app tables, the
   pincode directory and the Vector Search index; MODIFY on the label cache
 - CAN_USE on the Vector Search endpoint
-- CAN_EDIT on the MLflow experiment, when it exists (ticket #31)
 
 Run from the repo root: uv run python scripts/app_permissions.py
 """
@@ -37,8 +36,6 @@ from config import (
     OUTPUT_SCHEMA,
 )
 from talaria.care_finder.backend import LABELS_SCHEMA, DatabricksBackend
-
-EXPERIMENT = "/Shared/talaria-care-finder"
 
 w = WorkspaceClient()
 app = w.apps.get(APP_NAME)
@@ -85,15 +82,3 @@ w.api_client.do(
     body={"access_control_list": [{"service_principal_name": principal, "permission_level": "CAN_USE"}]},
 )
 print(f"CAN_USE on Vector Search endpoint {APP_VS_ENDPOINT}")
-
-try:
-    experiment = w.experiments.get_by_name(EXPERIMENT).experiment
-except Exception:
-    experiment = None
-if experiment:
-    w.api_client.do(
-        "PATCH",
-        f"/api/2.0/permissions/experiments/{experiment.experiment_id}",
-        body={"access_control_list": [{"service_principal_name": principal, "permission_level": "CAN_EDIT"}]},
-    )
-    print(f"CAN_EDIT on experiment {EXPERIMENT}")
