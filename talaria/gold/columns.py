@@ -27,6 +27,8 @@ COPIED_COLUMNS = {
 GOLD_FACILITIES = COPIED_COLUMNS | {
     "confidence_score": "double",
     "confidence_reasons": "array<string>",
+    # The facility text behind each fired rule (`citations.py`).
+    "confidence_citations": "array<struct<rule:string,field:string,item_id:string,text:string>>",
     "location_uncertain": "boolean",
     "needs_investigation": "boolean",
 }

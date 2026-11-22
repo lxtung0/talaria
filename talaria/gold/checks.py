@@ -23,6 +23,7 @@ def check_gold(silver: DataFrame, facilities: DataFrame, items: DataFrame) -> No
     failures = _facility_failures(silver, facilities)
     failures += _copied_value_failures(silver, facilities)
     failures += _item_failures(silver, facilities, items)
+    failures += _citation_failures(facilities, items)
     if failures:
         _fail(failures)
 
@@ -111,6 +112,19 @@ def _copied_value_failures(silver: DataFrame, facilities: DataFrame) -> list[str
 def _value_hash(name: str) -> Column:
     """A never-NULL hash that tells NULL, an empty list and a list holding NULL apart."""
     return F.sha2(F.to_json(F.struct(F.col(name))), 256)
+
+
+def _citation_failures(facilities: DataFrame, items: DataFrame) -> list[str]:
+    """Every citation has text, and every cited `item_id` is a row of `gold_facility_items`."""
+    cited = facilities.select(F.explode("confidence_citations").alias("c")).select("c.*")
+    blank = cited.where(F.col("text").isNull()).count()
+    unknown = cited.where(F.col("item_id").isNotNull()).join(items, "item_id", "left_anti").count()
+    failures = []
+    if blank:
+        failures.append(f"confidence_citations: {blank} citation(s) without text")
+    if unknown:
+        failures.append(f"confidence_citations: {unknown} citation(s) whose item_id isn't in gold_facility_items")
+    return failures
 
 
 def _list_length(name: str) -> Column:
