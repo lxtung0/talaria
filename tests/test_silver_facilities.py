@@ -35,12 +35,14 @@ def test_keeps_every_row_and_silver_base_column_unchanged(make_silver_inputs, no
     assert sorted(kept.collect(), key=lambda r: r.unique_id) == sorted(silver_base.collect(), key=lambda r: r.unique_id)
 
 
-def test_adds_only_the_flag_columns(make_silver_inputs, no_pincodes):
+def test_adds_only_the_new_columns(make_silver_inputs, no_pincodes):
     bronze, silver_base = make_silver_inputs({})
 
     facilities = build_silver_facilities(silver_base, bronze, no_pincodes, RUN_DATE)
 
     assert facilities.dtypes[len(silver_base.columns) :] == [
+        ("flag_affiliation_operator_conflict", "boolean"),
+        ("primary_affiliation", "string"),
         ("flag_page_update_unparsable", "boolean"),
         ("flag_future_page_update", "boolean"),
     ]

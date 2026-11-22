@@ -11,7 +11,7 @@ from pyspark.sql import types as T
 
 from talaria.silver_base import columns, state_check
 from talaria.silver_base.checks import unique_id_counts, unique_id_failures
-from talaria.silver_base.text import clean_item, clean_list_text, clean_text, lookup
+from talaria.silver_base.text import clean_item, clean_list_text, clean_text, lookup, text_item_key
 
 
 def build_silver_base(bronze: DataFrame, pincodes: DataFrame) -> DataFrame:
@@ -139,7 +139,7 @@ def _apply_to_value_or_items(df: DataFrame, name: str, rule: columns.Rule) -> Co
 def _remove_empty_and_duplicate_items(df: DataFrame) -> DataFrame:
     """Drop NULL items and Duplicate items (keeping the first, in order); an empty list becomes NULL.
 
-    Text lists compare items by `_text_item_key`; identifier lists
+    Text lists compare items by `text_item_key`; identifier lists
     (`columns.IDENTIFIER_LIST_COLUMNS`) by exact equality, since case and punctuation matter in them.
     """
 
@@ -151,21 +151,9 @@ def _remove_empty_and_duplicate_items(df: DataFrame) -> DataFrame:
     return df.withColumns({name: clean(name) for name in columns.LIST_COLUMNS})
 
 
-def _text_item_key(item: Column) -> Column:
-    """Lower-case, letters and digits only, one trailing `s` removed: equal keys are Duplicate items.
-
-    An item with nothing left (`-`, `&`, `s`) keys on its exact text instead, so
-    such items are duplicates only when identical. The `#` prefix keeps those
-    keys apart from letter-and-digit keys.
-    """
-    alphanumeric = F.regexp_replace(F.lower(item), r"[^\p{L}\p{N}]", "")
-    key = F.regexp_replace(alphanumeric, "s$", "")
-    return F.when(key == "", F.concat(F.lit("#"), item)).otherwise(key)
-
-
 def _dedupe_by_text_key(items: Column) -> Column:
     """Keep each item whose key no earlier item shares (first spelling and order kept)."""
-    keys = F.transform(items, _text_item_key)
+    keys = F.transform(items, text_item_key)
     return F.filter(items, lambda item, i: ~F.array_contains(F.slice(keys, 1, i), keys[i]))
 
 
