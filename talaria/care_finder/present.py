@@ -140,8 +140,9 @@ def formula_text(answer: dict) -> str:
         f"{s['hits_per_type']} hits of each type count\n"
         "service evidence = 1 − Π(1 − hit value)\n"
         f"rank = service evidence × (0.5 + 0.5 × confidence) × exp(−distance / {d0:.0f} km) × affordability\n"
-        f"affordability = 1 + {s['affordability_max_boost']} × tier × share of households uninsured here "
-        f"({tiers}, other 0)"
+        f"affordability = 1 + {s['affordability_max_boost']} × tier × need ({tiers}, other 0); "
+        f"need = ({s['low_insurance_pct']:g} − % of households insured here) / {s['low_insurance_pct']:g}, "
+        "0 at or above that or with no NFHS-5 figure"
     )
 
 
