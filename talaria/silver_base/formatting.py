@@ -55,11 +55,23 @@ _URL = r"^(?i)(?:https?://)?(?:www\.)?([^/?#]*)(.*)$"
 _HOST = r"^[a-z0-9-]+(\.[a-z0-9-]+)+(:[0-9]+)?$"
 
 
+def _host_and_port(col: Column) -> Column:
+    return F.lower(F.regexp_extract(col, _URL, 1))
+
+
+def url_host(col: Column) -> Column:
+    """The lower-cased host, without scheme, leading `www.`, port or path.
+
+    Not validated: text with no recognisable host gives whatever stands in the host's place.
+    """
+    return F.regexp_replace(_host_and_port(col), ":[0-9]+$", "")
+
+
 def format_url(col: Column) -> Column:
     """Host lower-cased; scheme, leading `www.` and trailing `/` removed; path and its case kept.
 
     A value without a recognisable host (`Not Available Online`) is unchanged.
     """
-    host = F.lower(F.regexp_extract(col, _URL, 1))
+    host = _host_and_port(col)
     rest = F.regexp_replace(F.regexp_extract(col, _URL, 2), r"/+$", "")
     return F.when(host.rlike(_HOST), F.concat(host, rest)).otherwise(col)

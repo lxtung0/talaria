@@ -66,3 +66,15 @@ def clean_list_text(col: Column) -> Column:
 def lookup(table: dict[str, str], key: Column) -> Column:
     """The table's value for `key`, or NULL when `key` is not in it."""
     return F.create_map(*[F.lit(x) for pair in table.items() for x in pair])[key]
+
+
+def text_item_key(item: Column) -> Column:
+    """Lower-case, letters and digits only, one trailing `s` removed: equal keys are Duplicate items.
+
+    An item with nothing left (`-`, `&`, `s`) keys on its exact text instead, so
+    such items are duplicates only when identical. The `#` prefix keeps those
+    keys apart from letter-and-digit keys.
+    """
+    alphanumeric = F.regexp_replace(F.lower(item), r"[^\p{L}\p{N}]", "")
+    key = F.regexp_replace(alphanumeric, "s$", "")
+    return F.when(key == "", F.concat(F.lit("#"), item)).otherwise(key)

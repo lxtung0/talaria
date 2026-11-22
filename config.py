@@ -30,6 +30,6 @@ def _out(layer: str, name: str) -> str:
 BRONZE = {name: _out("bronze", name) for name in SOURCE}
 SILVER = {name: _out("silver", name) for name in SOURCE}
 # Silver base: the first Silver stage (objective fixes only). SILVER["facilities"]
-# stays reserved for the final Silver facilities stage, which reads from this.
+# is Silver facilities, the final Silver stage, which reads from this.
 SILVER_BASE = {"facilities": _out("silver", "facilities_base")}
 GOLD = {}  # add gold tables here as the analysis takes shape, e.g. GOLD["facilities_by_district"] = _out("gold", "facilities_by_district")
