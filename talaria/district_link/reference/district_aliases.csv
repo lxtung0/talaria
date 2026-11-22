@@ -1,0 +1,142 @@
+state,directory_district,nfhs_district,approximate,note
+Andaman And Nicobar Islands,NORTH AND MIDDLE ANDAMAN,North & Middle Andaman,False,spelling
+Andaman And Nicobar Islands,SOUTH ANDAMANS,South Andaman,False,spelling
+Andhra Pradesh,VISAKHAPATANAM,Visakhapatnam,False,spelling
+Andhra Pradesh,SPSR NELLORE,Sri Potti Sriramulu Nello,False,NFHS-5 truncates the name
+Andhra Pradesh,Alluri Sitharama Raju,Visakhapatnam,True,2022 district carved mainly from Visakhapatnam
+Andhra Pradesh,Anakapalli,Visakhapatnam,True,2022 district carved from Visakhapatnam
+Andhra Pradesh,Annamayya,Y.S.R.,True,2022 district carved mainly from Y.S.R. Kadapa
+Andhra Pradesh,Bapatla,Guntur,True,2022 district carved mainly from Guntur
+Andhra Pradesh,Eluru,West Godavari,True,2022 district carved mainly from West Godavari
+Andhra Pradesh,Kakinada,East Godavari,True,2022 district carved from East Godavari
+Andhra Pradesh,Konaseema,East Godavari,True,2022 district carved from East Godavari
+Andhra Pradesh,NTR,Krishna,True,2022 district carved from Krishna
+Andhra Pradesh,Nandyal,Kurnool,True,2022 district carved from Kurnool
+Andhra Pradesh,Palnadu,Guntur,True,2022 district carved from Guntur
+Andhra Pradesh,Parvathipuram Manyam,Vizianagaram,True,2022 district carved mainly from Vizianagaram
+Andhra Pradesh,Sri Sathya Sai,Anantapur,True,2022 district carved from Anantapur
+Andhra Pradesh,Tirupati,Chittoor,True,2022 district carved mainly from Chittoor
+Arunachal Pradesh,KAMLE,Lower Subansiri,True,2017 district carved from Lower Subansiri
+Arunachal Pradesh,LEPARADA,West Siang,True,2018 district carved from Lower Siang (itself from West Siang)
+Arunachal Pradesh,LOWER SIANG,West Siang,True,2017 district carved mainly from West Siang
+Arunachal Pradesh,PAKKE KESSANG,East Kameng,True,2018 district carved from East Kameng
+Arunachal Pradesh,SHI YOMI,West Siang,True,2018 district carved from West Siang
+Assam,Bajali,Barpeta,True,2020 district carved from Barpeta
+Assam,KAMRUP METRO,Kamrup Metropolitan,False,spelling
+Assam,MARIGAON,Morigaon,False,spelling
+Bihar,PURBI CHAMPARAN,Purba Champaran,False,spelling
+Chhattisgarh,Gaurella Pendra Marwahi,Bilaspur,True,2020 district carved from Bilaspur
+Chhattisgarh,KABIRDHAM,Kabeerdham,False,spelling
+Chhattisgarh,KANKER,Uttar Bastar Kanker,False,official long name
+Chhattisgarh,KONDAGAON,Kodagaon,False,spelling
+Chhattisgarh,KOREA,Koriya,False,spelling
+Gujarat,ARVALLI,Aravali,False,spelling
+Gujarat,CHHOTAUDEPUR,Chhota Udaipur,False,spelling
+Gujarat,DANG,The Dangs,False,official long name
+Haryana,CHARKI DADRI,Charkhi Dadri,False,spelling
+Haryana,GURUGRAM,Gurgaon,False,renamed 2016
+Haryana,NUH,Mewat,False,renamed 2016
+Himachal Pradesh,LAHUL AND SPITI,Lahul & Spiti,False,spelling
+Jammu And Kashmir,BANDIPORA,Bandipore,False,spelling
+Jammu And Kashmir,BARAMULLA,Baramula,False,spelling
+Jammu And Kashmir,Budgam,Badgam,False,spelling
+Jammu And Kashmir,POONCH,Punch,False,spelling
+Jammu And Kashmir,SHOPIAN,Shupiyan,False,spelling
+Jharkhand,EAST SINGHBUM,Purbi Singhbhum,False,spelling
+Jharkhand,KODERMA,Kodarma,False,spelling
+Jharkhand,SAHEBGANJ,Sahibganj,False,spelling
+Jharkhand,WEST SINGHBHUM,Pashchimi Singhbhum,False,spelling
+Karnataka,BALLARI,Bellary,False,renamed 2014
+Karnataka,BELAGAVI,Belgaum,False,renamed 2014
+Karnataka,BENGALURU RURAL,Bangalore Rural,False,renamed 2014
+Karnataka,BENGALURU URBAN,Bangalore,False,renamed 2014
+Karnataka,CHAMARAJANAGARA,Chamarajanagar,False,spelling
+Karnataka,CHIKKAMAGALURU,Chikmagalur,False,renamed 2014
+Karnataka,DAVANGERE,Davanagere,False,spelling
+Karnataka,KALABURAGI,Gulbarga,False,renamed 2014
+Karnataka,MYSURU,Mysore,False,renamed 2014
+Karnataka,SHIVAMOGGA,Shimoga,False,renamed 2014
+Karnataka,TUMAKURU,Tumkur,False,renamed 2014
+Karnataka,VIJAYAPURA,Bijapur,False,renamed 2014
+Karnataka,VIJAYNAGAR,Bellary,True,2021 district carved from Ballari
+Lakshadweep,LAKSHADWEEP DISTRICT,Lakshadweep,False,spelling
+Madhya Pradesh,EAST NIMAR,Khandwa (East Nimar),False,official long name
+Madhya Pradesh,KHARGONE,Khargone (West Nimar),False,official long name
+Madhya Pradesh,NARSINGHPUR,Narsimhapur,False,spelling
+Madhya Pradesh,Niwari,Tikamgarh,True,2018 district carved from Tikamgarh
+Maharashtra,AHMEDNAGAR,Ahmadnagar,False,spelling
+Maharashtra,BEED,Bid,False,spelling
+Maharashtra,BULDHANA,Buldana,False,spelling
+Maharashtra,GONDIA,Gondiya,False,spelling
+Maharashtra,RAIGAD,Raigarh,False,spelling (Raigarh also names a Chhattisgarh district)
+Manipur,JIRIBAM,Imphal East,True,2016 district carved from Imphal East
+Manipur,KAKCHING,Thoubal,True,2016 district carved from Thoubal
+Manipur,KAMJONG,Ukhrul,True,2016 district carved from Ukhrul
+Manipur,KANGPOKPI,Senapati,True,2016 district carved from Senapati
+Manipur,NONEY,Tamenglong,True,2016 district carved from Tamenglong
+Manipur,PHERZAWL,Churachandpur,True,2016 district carved from Churachandpur
+Manipur,TENGNOUPAL,Chandel,True,2016 district carved from Chandel
+Meghalaya,EAST JAINTIA HILLS,East Jantia Hills,False,spelling
+Mizoram,SAIHA,Chandel,False,NFHS-5 labels Mizoram's Saiha row "Chandel" (the only Mizoram district it lacks)
+Mizoram,Hnahthial,Lunglei,True,2019 district carved from Lunglei
+Mizoram,KHAWZAWL,Champhai,True,2019 district carved from Champhai
+Mizoram,SAITUAL,Aizawl,True,2019 district carved from Aizawl
+Nagaland,Noklak,Tuensang,True,2017 district carved from Tuensang
+Odisha,BOUDH,Baudh,False,spelling
+Odisha,DEOGARH,Debagarh,False,spelling
+Odisha,NABARANGPUR,Nabarangapur,False,spelling
+Odisha,SONEPUR,Subarnapur,False,official name
+Puducherry,PONDICHERRY,Puducherry,False,renamed 2006
+Punjab,FIROZEPUR,Firozpur,False,spelling
+Punjab,MALERKOTLA,Sangrur,True,2021 district carved from Sangrur
+Punjab,S.A.S Nagar,Sahibzada Ajit Singh Nagar,False,abbreviation
+Punjab,SRI MUKTSAR SAHIB,Muktsar,False,renamed 2012
+Rajasthan,CHITTORGARH,Chittaurgarh,False,spelling
+Rajasthan,DHOLPUR,Dhaulpur,False,spelling
+Rajasthan,JALORE,Jalor,False,spelling
+Rajasthan,JHUNJHUNU,Jhunjhunun,False,spelling
+Sikkim,Pakyong,East District,True,2021 district carved from East Sikkim
+Sikkim,Soreng,West District,True,2021 district carved from West Sikkim
+Tamil Nadu,CHENGALPATTU,Kancheepuram,True,2019 district carved from Kancheepuram
+Tamil Nadu,KALLAKURICHI,Viluppuram,True,2019 district carved from Viluppuram
+Tamil Nadu,KANCHIPURAM,Kancheepuram,False,spelling
+Tamil Nadu,MAYILADUTHURAI,Nagapattinam,True,2020 district carved from Nagapattinam
+Tamil Nadu,Ranipet,Vellore,True,2019 district carved from Vellore
+Tamil Nadu,TENKASI,Tirunelveli,True,2019 district carved from Tirunelveli
+Tamil Nadu,TUTICORIN,Thoothukkudi,False,spelling
+Tamil Nadu,Tirupathur,Vellore,True,2019 district carved from Vellore
+Tamil Nadu,VILLUPURAM,Viluppuram,False,spelling
+Telangana,HANUMAKONDA,Warangal Urban,True,renamed 2021 with boundary changes
+Telangana,KUMURAM BHEEM ASIFABAD,Komaram Bheem Asifabad,False,spelling
+Telangana,Mulugu,Jayashankar Bhupalapally,True,2019 district carved from Jayashankar Bhupalpally
+Telangana,Narayanpet,Mahabubnagar,True,2019 district carved from Mahabubnagar
+Telangana,WARANGAL,Warangal Rural,True,renamed 2021 with boundary changes
+The Dadra And Nagar Haveli And Daman And Diu,DADRA AND NAGAR HAVELI,Dadra & Nagar Haveli,False,spelling
+Uttar Pradesh,AMROHA,Jyotiba Phule Nagar,False,renamed 2012
+Uttar Pradesh,AYODHYA,Faizabad,False,renamed 2018
+Uttar Pradesh,BHADOHI,Sant Ravidas Nagar (Bhadohi),False,official long name
+Uttar Pradesh,HATHRAS,Mahamaya Nagar,False,renamed 2012
+Uttar Pradesh,Kasganj,Kanshiram Nagar,False,renamed 2012
+Uttar Pradesh,MAHARAJGANJ,Mahrajganj,False,spelling
+Uttar Pradesh,PRAYAGRAJ,Allahabad,False,renamed 2018
+Uttar Pradesh,SANT KABEER NAGAR,Sant Kabir Nagar,False,spelling
+Uttar Pradesh,SHRAVASTI,Shrawasti,False,spelling
+Uttarakhand,HARIDWAR,Hardwar,False,spelling
+Uttarakhand,PAURI GARHWAL,Garhwal,False,official name
+Uttarakhand,UDAM SINGH NAGAR,Udham Singh Nagar,False,spelling
+West Bengal,24 PARAGANAS NORTH,North Twenty Four Pargana,False,spelling
+West Bengal,24 PARAGANAS SOUTH,South Twenty Four Pargana,False,spelling
+West Bengal,Alipurduar,Jalpaiguri,True,2014 district carved from Jalpaiguri
+West Bengal,COOCHBEHAR,Koch Bihar,False,spelling
+West Bengal,DARJEELING,Darjiling,False,spelling
+West Bengal,DINAJPUR DAKSHIN,Dakshin Dinajpur,False,spelling
+West Bengal,DINAJPUR UTTAR,Uttar Dinajpur,False,spelling
+West Bengal,HOOGHLY,Hugli,False,spelling
+West Bengal,HOWRAH,Haora,False,spelling
+West Bengal,Jhargram,Paschim Medinipur,True,2017 district carved from Paschim Medinipur
+West Bengal,KALIMPONG,Darjiling,True,2017 district carved from Darjeeling
+West Bengal,MEDINIPUR EAST,Purba Medinipur,False,spelling
+West Bengal,MEDINIPUR WEST,Paschim Medinipur,False,spelling
+West Bengal,PASCHIM BARDHAMAN,Paschim Barddhaman,False,spelling
+West Bengal,PURBA BARDHAMAN,,False,no NFHS-5 row in this dataset: left unlinked
+West Bengal,PURULIA,Puruliya,False,spelling

@@ -34,6 +34,8 @@ SILVER = {name: _out("silver", name) for name in SOURCE}
 SILVER_BASE = {"facilities": _out("silver", "facilities_base")}
 # Silver Stage 3: Silver facilities plus capacity, large-hospital and consistency flags (#35),
 # and its per-rule counts.
+# Each facility's NFHS-5 district (#44): joins SILVER["nfhs5"] to facilities.
+SILVER_FACILITY_DISTRICTS = _out("silver", "facility_districts")
 SILVER_STAGE3 = {
     "facilities": _out("silver", "facilities_stage3"),
     "rule_counts": _out("silver", "stage3_rule_counts"),
