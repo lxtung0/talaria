@@ -32,19 +32,21 @@ SILVER = {name: _out("silver", name) for name in SOURCE}
 # Silver base: the first Silver stage (objective fixes only). SILVER["facilities"]
 # is Silver facilities, the final Silver stage, which reads from this.
 SILVER_BASE = {"facilities": _out("silver", "facilities_base")}
-# Silver Stage 3: Silver facilities plus capacity, large-hospital and consistency flags (#35),
-# and its per-rule counts.
 # Each facility's NFHS-5 district (#44): joins SILVER["nfhs5"] to facilities.
 SILVER_FACILITY_DISTRICTS = _out("silver", "facility_districts")
+# Silver Stage 3: Silver facilities plus capacity, large-hospital and consistency flags (#35),
+# and its per-rule counts.
 SILVER_STAGE3 = {
     "facilities": _out("silver", "facilities_stage3"),
     "rule_counts": _out("silver", "stage3_rule_counts"),
 }
 # Gold (spec #37): one row per Facility with its confidence score, and one row per claim.
-# Built from Silver Stage 3.
+# Built from Silver Stage 3. Plus the district cells the care finder looks up.
 GOLD = {
     "facilities": _out("gold", "facilities"),
     "facility_items": _out("gold", "facility_items"),
+    # One row per H3 res-5 cell with post offices: its NFHS-5 district and the indicators the app shows.
+    "district_cells": _out("gold", "district_cells"),
 }
 
 # Care finder app (spec #26). Silver facilities supplies the claim lists and flags;
@@ -58,6 +60,8 @@ APP = {
     "item_labels": _out("app", "item_labels"),
 }
 APP_PINCODES = BRONZE["pincodes"]
+# The NFHS-5 district and insurance coverage of each H3 cell, for the affordability factor.
+APP_AREA_CELLS = GOLD["district_cells"]
 APP_VS_ENDPOINT = "talaria-vs"
 APP_VS_INDEX = f"{OUTPUT_CATALOG}.{OUTPUT_SCHEMA}.app_facility_items_index"
 APP_EMBEDDING_MODEL = "databricks-gte-large-en"

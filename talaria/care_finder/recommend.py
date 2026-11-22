@@ -65,11 +65,15 @@ def recommend(
     # One read for every Facility checked: the scored ones and, for the search map, the rest.
     checked = sorted({uid for r in found["rounds"] for uid in r["facilities_checked"]})
     facilities = {f["unique_id"]: f for f in backend.facilities(checked)} if checked else {}
-    results = score_facilities(found["hits"], facilities, place, urgency, settings)
+    area = area_around(place, backend)
+    need = scoring.insurance_need(area["insurance_pct"] if area else None, settings)
+    results = score_facilities(found["hits"], facilities, place, urgency, settings, need)
     return {
         **base,
         "status": "ok",
         "location": {"label": place.label, "kind": place.kind, "lat": place.lat, "lon": place.lon},
+        "area": area,
+        "insurance_need": round(need, 3),
         "top": results[: settings.top_n],
         "others": results[settings.top_n : settings.top_n + settings.others_n],
         "evidence_checked": not found["fallback_used"],
@@ -107,6 +111,17 @@ def map_rounds(rounds: list[dict], hits: list[dict], facilities: dict) -> list[d
         }
         for r in rounds
     ]
+
+
+def area_around(place: Place, backend) -> dict | None:
+    """The NFHS-5 district and insurance coverage around `place`, or None.
+
+    Only the rank uses it, and only a little, so a failed lookup never stops the query.
+    """
+    try:
+        return backend.area(place.lat, place.lon)
+    except Exception:
+        return None
 
 
 def resolve_location(text: str, backend) -> Place | list[Place]:
@@ -150,21 +165,29 @@ def _label_hits(service, hits, cache, new_labels, backend, settings):
     return labels, info
 
 
-def score_facilities(hits: list[dict], facilities: dict, place: Place, urgency: str, settings: Settings = DEFAULT) -> list[dict]:
-    """One result per Facility with a direct or related hit, best rank first. `facilities` is by `unique_id`."""
+def score_facilities(
+    hits: list[dict], facilities: dict, place: Place, urgency: str, settings: Settings = DEFAULT, need: float = 0.0
+) -> list[dict]:
+    """One result per Facility with a direct or related hit, best rank first. `facilities` is by `unique_id`.
+
+    `need` is the area's `scoring.insurance_need`: 0 (no affordability boost) unless coverage is low.
+    """
     by_facility: dict[str, list[dict]] = {}
     for hit in hits:
         if hit["label"] in ("direct", "related"):
             by_facility.setdefault(hit["unique_id"], []).append(hit)
     results = [
-        build_result(facilities[uid], facility_hits, place, urgency, settings)
+        build_result(facilities[uid], facility_hits, place, urgency, settings, need)
         for uid, facility_hits in by_facility.items()
         if uid in facilities
     ]
     return sorted(results, key=lambda r: (-r["rank"], r["distance_km"]))
 
 
-def build_result(facility: dict, hits: list[dict], place: Place, urgency: str, settings: Settings = DEFAULT) -> dict:
+def build_result(
+    facility: dict, hits: list[dict], place: Place, urgency: str, settings: Settings = DEFAULT, need: float = 0.0
+) -> dict:
+    affordability = scoring.affordability_factor(facility.get("affordability"), need, settings)
     distance = scoring.haversine_km(place.lat, place.lon, facility["latitude"], facility["longitude"])
     evidence = scoring.service_evidence(hits, settings)
     confidence = facility.get("confidence_score")
@@ -190,9 +213,11 @@ def build_result(facility: dict, hits: list[dict], place: Place, urgency: str, s
         "confidence_band": scoring.confidence_band(confidence, settings),
         "confidence_reasons": facility.get("confidence_reasons") or [],
         "distance_factor": round(scoring.distance_decay(distance, urgency, settings), 3),
+        "affordability": facility.get("affordability"),
+        "affordability_factor": round(affordability, 3),
         "open_24_7_quote": open_24_7_quote,
         "open_24_7_factor": scoring.open_24_7_factor(bool(open_24_7_quote), urgency, settings),
-        "rank": round(scoring.rank_score(evidence, confidence, distance, urgency, settings, bool(open_24_7_quote)), 4),
+        "rank": round(scoring.rank_score(evidence, confidence, distance, urgency, settings, affordability, bool(open_24_7_quote)), 4),
         "evidence": [
             {
                 "item_id": h["item_id"],

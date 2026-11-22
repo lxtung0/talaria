@@ -134,14 +134,19 @@ def other_line(result: dict, last_top: dict | None) -> str:
 def formula_text(answer: dict) -> str:
     s = answer["settings"]
     d0 = s["distance_decay_km"][answer["urgency"]]
-    rank = f"rank = service evidence × (0.5 + 0.5 × confidence) × exp(−distance / {d0:.0f} km)"
+    tiers = ", ".join(f"{tier} {value:g}" for tier, value in s["affordability_values"].items())
+    rank = f"rank = service evidence × (0.5 + 0.5 × confidence) × exp(−distance / {d0:.0f} km) × affordability"
     if answer["urgency"] == "emergency":
         w = s["emergency_24_7_weight"]
         rank += f" × ({1 - w:g} + {w:g} × open 24/7)"
     return (
         "hit value = label value × type weight; only the best "
         f"{s['hits_per_type']} hits of each type count\n"
-        "service evidence = 1 − Π(1 − hit value)\n" + rank
+        "service evidence = 1 − Π(1 − hit value)\n"
+        + rank + "\n"
+        f"affordability = 1 + {s['affordability_max_boost']} × tier × need ({tiers}, other 0); "
+        f"need = ({s['low_insurance_pct']:g} − % of households insured here) / {s['low_insurance_pct']:g}, "
+        "0 at or above that or with no NFHS-5 figure"
     )
 
 
@@ -150,6 +155,7 @@ def score_parts(result: dict) -> list[dict]:
         {"part": "Service evidence", "value": result["service_evidence"], "band": result["evidence_band"]},
         {"part": "Record confidence", "value": result["confidence_score"], "band": result["confidence_band"]},
         {"part": "Distance factor", "value": result["distance_factor"], "band": f"{result['distance_km']:.1f} km"},
+        {"part": "Affordability factor", "value": result["affordability_factor"], "band": result["affordability"] or "—"},
         {"part": "Open 24/7 factor", "value": result.get("open_24_7_factor", 1.0), "band": result.get("open_24_7_quote") or "no 24/7 claim"},
         {"part": "Rank", "value": result["rank"], "band": ""},
     ]

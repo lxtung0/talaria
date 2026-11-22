@@ -2,7 +2,7 @@
 
 - app resources: the SQL warehouse (CAN_USE) and the two serving endpoints (CAN_QUERY)
 - Unity Catalog grants: USE CATALOG / USE SCHEMA; SELECT on the app tables, the
-  pincode directory and the Vector Search index; MODIFY on the label cache
+  pincode directory, the Gold district cells and the Vector Search index; MODIFY on the label cache
 - CAN_USE on the Vector Search endpoint
 
 Run from the repo root: uv run python scripts/app_permissions.py
@@ -25,6 +25,7 @@ from databricks.sdk.service.apps import (
 
 from config import (
     APP,
+    APP_AREA_CELLS,
     APP_CHAT_MODEL,
     APP_EMBEDDING_MODEL,
     APP_NAME,
@@ -68,6 +69,7 @@ grants = [
     f"GRANT SELECT ON TABLE {APP['facilities']} TO `{principal}`",
     f"GRANT SELECT ON TABLE {APP['facility_items']} TO `{principal}`",
     f"GRANT SELECT ON TABLE {APP_PINCODES} TO `{principal}`",
+    f"GRANT SELECT ON TABLE {APP_AREA_CELLS} TO `{principal}`",
     f"GRANT SELECT, MODIFY ON TABLE {APP['item_labels']} TO `{principal}`",
     f"GRANT SELECT ON TABLE {APP_VS_INDEX} TO `{principal}`",
 ]

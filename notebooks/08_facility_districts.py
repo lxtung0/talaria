@@ -23,7 +23,7 @@ from talaria.district_link.link_counts import format_link_counts, link_counts
 
 facilities = spark.table(SILVER["facilities"])
 silver_nfhs5 = spark.table(SILVER["nfhs5"])
-districts = build_facility_districts(facilities, spark.table(BRONZE["pincodes"]), silver_nfhs5).cache()
+districts = build_facility_districts(facilities, spark.table(BRONZE["pincodes"]), silver_nfhs5)
 
 # COMMAND ----------
 

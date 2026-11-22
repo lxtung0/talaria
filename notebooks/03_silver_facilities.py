@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "6"
+# ///
 # MAGIC %md
 # MAGIC # 03 · Silver facilities
 # MAGIC Builds the second and final Silver stage for facilities (spec #13): Silver base, unchanged, plus new flag and value columns.

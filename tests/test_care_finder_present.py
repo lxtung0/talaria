@@ -87,7 +87,7 @@ def test_formula_uses_the_urgency_distance_scale():
     assert "exp(−distance / 100 km)" in present.formula_text(a)
     assert "24/7" not in present.formula_text(a)
     a["urgency"] = "emergency"
-    assert "exp(−distance / 25 km) × (0.85 + 0.15 × open 24/7)" in present.formula_text(a)
+    assert "exp(−distance / 25 km) × affordability × (0.85 + 0.15 × open 24/7)" in present.formula_text(a)
 
 
 def test_call_line_needs_a_phone():

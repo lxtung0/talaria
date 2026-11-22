@@ -42,6 +42,12 @@ class Settings:
     # Emergency only: a Facility with no 24/7 claim keeps 1 − this of its rank. Kept
     # smaller than the confidence factor's 0.5, so evidence and distance weigh most.
     emergency_24_7_weight: float = 0.15
+    # Affordability: free or low-cost Facilities rank a little higher where fewer households
+    # are insured (NFHS-5, the entered location's H3 cell), and only below `low_insurance_pct`.
+    # rank × (1 + boost × tier × need), need = (low_insurance_pct − insurance %) / low_insurance_pct.
+    affordability_values: dict = field(default_factory=lambda: {"government": 1.0, "charitable": 0.67, "public": 0.33})
+    affordability_max_boost: float = 0.15  # government, where no household is insured: rank × 1.15
+    low_insurance_pct: float = 41.0  # NFHS-5 India: 41% of households insured; at or above it, or no figure: no boost
 
     # Bands.
     evidence_bands: tuple = (("strong", 0.75), ("some", 0.5))  # above 0 otherwise: "mention only"

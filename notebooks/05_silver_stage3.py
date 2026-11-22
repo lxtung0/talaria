@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "6"
+# ///
 # MAGIC %md
 # MAGIC # 05 · Silver Stage 3
 # MAGIC Builds Silver Stage 3 (#35): Silver facilities plus capacity outlier (R0), name vs type (F1), large hospital (R1-R5)

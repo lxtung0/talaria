@@ -58,13 +58,29 @@ def open_24_7_factor(open_24_7: bool, urgency: str, settings: Settings = DEFAULT
     return 1.0 - w + w * open_24_7
 
 
+def insurance_need(insurance_pct: float | None, settings: Settings = DEFAULT) -> float:
+    """0 at or above `low_insurance_pct` or with no NFHS-5 figure, rising to 1 where no household is insured."""
+    if insurance_pct is None:
+        return 0.0
+    threshold = settings.low_insurance_pct
+    return min(max((threshold - insurance_pct) / threshold, 0.0), 1.0)
+
+
+def affordability_factor(tier: str | None, need: float, settings: Settings = DEFAULT) -> float:
+    """1 for a Facility with no free or low-cost tier, or where `need` is 0; up to 1 + `affordability_max_boost`."""
+    return 1.0 + settings.affordability_max_boost * settings.affordability_values.get(tier, 0.0) * need
+
+
 def rank_score(
-    evidence: float, confidence: float, distance_km: float, urgency: str, settings: Settings = DEFAULT, open_24_7: bool = False
+    evidence: float, confidence: float, distance_km: float, urgency: str, settings: Settings = DEFAULT,
+    affordability: float = 1.0,
+    open_24_7: bool = False,
 ) -> float:
     return (
         evidence
         * (0.5 + 0.5 * confidence)
         * distance_decay(distance_km, urgency, settings)
+        * affordability
         * open_24_7_factor(open_24_7, urgency, settings)
     )
 

@@ -207,3 +207,18 @@ def test_a_name_in_two_states_is_ambiguous():
 def test_an_unknown_name_is_a_clear_error():
     with pytest.raises(LocationError, match="Atlantis"):
         choose_location("Atlantis", [], [])
+
+
+def test_insurance_need_is_zero_unless_coverage_is_below_the_national_figure():
+    assert scoring.insurance_need(None) == 0.0
+    assert scoring.insurance_need(41.0) == 0.0
+    assert scoring.insurance_need(80.0) == 0.0
+    assert scoring.insurance_need(20.5) == pytest.approx(0.5)
+    assert scoring.insurance_need(0.0) == 1.0
+
+
+def test_affordability_factor_scales_with_tier_and_need():
+    assert scoring.affordability_factor("government", 1.0) == pytest.approx(1.15)
+    assert scoring.affordability_factor("public", 0.5) == pytest.approx(1 + 0.15 * 0.33 * 0.5)
+    assert scoring.affordability_factor(None, 1.0) == 1.0
+    assert scoring.affordability_factor("government", 0.0) == 1.0

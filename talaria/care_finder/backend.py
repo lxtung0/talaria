@@ -9,10 +9,11 @@ import json
 import os
 import time
 
+import h3
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.sql import StatementParameterListItem, StatementState
 
-from config import APP, APP_CHAT_MODEL, APP_EMBEDDING_MODEL, APP_PINCODES, APP_SEARCH_PATH, APP_VS_INDEX, APP_WAREHOUSE_ID
+from config import APP, APP_AREA_CELLS, APP_CHAT_MODEL, APP_EMBEDDING_MODEL, APP_PINCODES, APP_SEARCH_PATH, APP_VS_INDEX, APP_WAREHOUSE_ID
 from talaria.care_finder.location import Place
 
 # The India bounding box: pincode directory offices outside it have broken coordinates.
@@ -166,6 +167,20 @@ class DatabricksBackend:
             s=service_key,
             rows=json.dumps(rows),
         )
+
+    def area(self, lat: float, lon: float) -> dict | None:
+        """The Gold district cell at `lat, lon` (else a neighbouring one): `nfhs_state`,
+        `nfhs_district`, `insurance_pct`. None where no cell nearby has post offices."""
+        cell = h3.latlng_to_cell(lat, lon, 5)
+        rows = self.sql(
+            f"""SELECT h3_r5, nfhs_state, nfhs_district, insurance_pct FROM {APP_AREA_CELLS}
+            WHERE array_contains(from_json(:cells, 'array<string>'), h3_r5)""",
+            cells=json.dumps(sorted(h3.grid_disk(cell, 1))),
+        )
+        if not rows:
+            return None
+        row = next((r for r in rows if r["h3_r5"] == cell), rows[0])
+        return {k: row[k] for k in ("nfhs_state", "nfhs_district", "insurance_pct")}
 
     def facilities(self, unique_ids: list[str]) -> list[dict]:
         """Each Facility's row plus `open_24_7_quote`: one of its claims that says 24/7, or null."""
