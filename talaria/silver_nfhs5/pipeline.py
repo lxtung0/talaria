@@ -10,6 +10,8 @@ from talaria.silver_nfhs5 import columns
 STATE_ALIASES = {"maharastra": "Maharashtra"}
 
 NUMBER = r"^-?\d+(\.\d+)?$"
+# A whole number, also as a `double` column reads as text (`882.0`).
+WHOLE_NUMBER = r"^-?\d+(\.0+)?$"
 LOW_SAMPLE_VALUE = r"^\((.*)\)$"
 
 
@@ -40,6 +42,11 @@ def district(raw: Column) -> Column:
 def _number(text: Column, kind: str) -> Column:
     """`text` as `kind` when it is a plain number, NULL otherwise (the runtime checks catch it)."""
     return F.when(text.rlike(NUMBER), text.cast(kind))
+
+
+def _whole_number(text: Column) -> Column:
+    """`text` as `int` when it is a whole number, NULL otherwise (the runtime checks catch it)."""
+    return F.when(text.rlike(WHOLE_NUMBER), text.cast("double").cast("int"))
 
 
 def _indicator(name: str) -> tuple[Column, Column, Column]:
@@ -74,7 +81,7 @@ def build_silver_nfhs5(bronze: DataFrame) -> DataFrame:
         elif name == columns.DISTRICT:
             selected.append(district(F.col(name)).alias(name))
         elif name in columns.SURVEY_SIZES:
-            selected.append(_number(trimmed(name), "int").alias(name))
+            selected.append(_whole_number(trimmed(name)).alias(name))
         elif name in parsed:
             selected.append(parsed[name][0].alias(name))
         else:
