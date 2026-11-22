@@ -49,9 +49,11 @@ GOLD = {
     "district_cells": _out("gold", "district_cells"),
 }
 
-# Care finder app (spec #26). The app reads one source Facilities table; swap
-# APP_SOURCE_FACILITIES to the Gold table once it exists (a one-line change).
+# Care finder app (spec #26). Silver facilities supplies the claim lists and flags;
+# Gold supplies which Facilities are in scope and their confidence score and log.
+# Gold alone can't be the source: it has no claim lists or flags.
 APP_SOURCE_FACILITIES = SILVER["facilities"]
+APP_CONFIDENCE_SOURCE = GOLD["facilities"]
 APP = {
     "facilities": _out("app", "facilities"),
     "facility_items": _out("app", "facility_items"),

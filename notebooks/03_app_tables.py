@@ -14,7 +14,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.abspath(".."))
-from config import APP, APP_EMBEDDING_MODEL, APP_SEARCH_PATH, APP_SOURCE_FACILITIES, APP_VS_ENDPOINT, APP_VS_INDEX
+from config import APP, APP_CONFIDENCE_SOURCE, APP_EMBEDDING_MODEL, APP_SEARCH_PATH, APP_SOURCE_FACILITIES, APP_VS_ENDPOINT, APP_VS_INDEX
 
 from delta.tables import DeltaTable
 from pyspark.sql import functions as F
@@ -24,7 +24,10 @@ from talaria.care_finder.items import build_app_tables
 # COMMAND ----------
 
 source = spark.table(APP_SOURCE_FACILITIES)
-facilities, items = build_app_tables(source)
+# Gold's confidence when its table exists (run 06_gold first); otherwise the placeholder 0.5.
+gold = spark.table(APP_CONFIDENCE_SOURCE) if spark.catalog.tableExists(APP_CONFIDENCE_SOURCE) else None
+print(f"Confidence from: {APP_CONFIDENCE_SOURCE if gold is not None else 'placeholder 0.5 (no Gold table yet)'}")
+facilities, items = build_app_tables(source, gold)
 
 # H3 functions only exist on Databricks, so `h3_r5` is added here, not in the package.
 h3_r5 = F.when(
@@ -67,7 +70,8 @@ spark.sql(f"ALTER TABLE {APP['facility_items']} SET TBLPROPERTIES (delta.enableC
 # COMMAND ----------
 
 counts = spark.table(APP["facility_items"]).groupBy("item_type").count().orderBy("item_type").collect()
-summary = [f"{row.item_type:<22}{row['count']:>10,}" for row in counts]
+summary = [f"Confidence from: {APP_CONFIDENCE_SOURCE if gold is not None else 'placeholder 0.5'}"]
+summary += [f"{row.item_type:<22}{row['count']:>10,}" for row in counts]
 summary.append(f"{'total':<22}{sum(r['count'] for r in counts):>10,}")
 print("\n".join(summary))
 
