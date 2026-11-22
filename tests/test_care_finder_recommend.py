@@ -339,10 +339,11 @@ def test_a_government_facility_ranks_a_little_higher_where_few_households_are_in
 
     free, private = result["top"]
     assert (free["unique_id"], private["unique_id"]) == ("free", "private")
-    assert free["affordability_factor"] == 1.12  # 1 + 0.15 × 1.0 × 0.8
+    need = (41 - 20) / 41
+    assert free["affordability_factor"] == round(1 + 0.15 * need, 3)
     assert private["affordability_factor"] == 1.0
-    assert free["rank"] == round(private["rank"] * 1.12, 4)
-    assert result["area"] == area and result["uninsured_share"] == 0.8
+    assert free["rank"] == pytest.approx(private["rank"] * (1 + 0.15 * need), abs=1e-4)
+    assert result["area"] == area and result["insurance_need"] == round(need, 3)
 
 
 def test_tiers_rank_government_then_charitable_then_public():
@@ -351,20 +352,19 @@ def test_tiers_rank_government_then_charitable_then_public():
     facilities = [facility_at(lat, lon, f"f{i}", affordability=t) for i, t in enumerate(tiers)]
     texts = {f"f{i}": ("equipment", "Dialysis unit", 0.95) for i in range(len(tiers))}
 
-    result = recommend("dialysis", "Patna", backend=FakeBackend(facilities, texts, area={"insurance_pct": 50.0}))
+    result = recommend("dialysis", "Patna", backend=FakeBackend(facilities, texts, area={"insurance_pct": 10.0}))
 
     assert [r["affordability"] for r in result["top"] + result["others"]] == ["government", "charitable", "public", None]
 
 
-def test_without_an_area_figure_the_national_uninsured_share_is_used():
+def test_no_boost_without_low_insurance_coverage():
     facilities, texts = _same_place_pair(affordability="government")
 
-    for area in (None, TimeoutError("warehouse down")):
+    for area in (None, TimeoutError("warehouse down"), {"insurance_pct": 41.0}, {"insurance_pct": 75.0}):
         result = recommend("dialysis", "Patna", backend=FakeBackend(facilities, texts, area=area))
 
-        assert result["status"] == "ok" and result["area"] is None
-        assert result["uninsured_share"] == 0.59
-        assert result["top"][0]["affordability_factor"] == round(1 + 0.15 * 0.59, 3)
+        assert result["status"] == "ok" and result["insurance_need"] == 0.0
+        assert [r["affordability_factor"] for r in result["top"]] == [1.0, 1.0]
 
 
 # --- healthcare desert (#46) ------------------------------------------------------

@@ -66,14 +66,14 @@ def recommend(
     checked = sorted({uid for r in found["rounds"] for uid in r["facilities_checked"]})
     facilities = {f["unique_id"]: f for f in backend.facilities(checked)} if checked else {}
     area = area_around(place, backend)
-    uninsured = scoring.uninsured_share(area["insurance_pct"] if area else None, settings)
-    results = score_facilities(found["hits"], facilities, place, urgency, settings, uninsured)
+    need = scoring.insurance_need(area["insurance_pct"] if area else None, settings)
+    results = score_facilities(found["hits"], facilities, place, urgency, settings, need)
     return {
         **base,
         "status": "ok",
         "location": {"label": place.label, "kind": place.kind, "lat": place.lat, "lon": place.lon},
         "area": area,
-        "uninsured_share": round(uninsured, 3),
+        "insurance_need": round(need, 3),
         "top": results[: settings.top_n],
         "others": results[settings.top_n : settings.top_n + settings.others_n],
         "evidence_checked": not found["fallback_used"],
@@ -166,19 +166,18 @@ def _label_hits(service, hits, cache, new_labels, backend, settings):
 
 
 def score_facilities(
-    hits: list[dict], facilities: dict, place: Place, urgency: str, settings: Settings = DEFAULT, uninsured: float | None = None
+    hits: list[dict], facilities: dict, place: Place, urgency: str, settings: Settings = DEFAULT, need: float = 0.0
 ) -> list[dict]:
     """One result per Facility with a direct or related hit, best rank first. `facilities` is by `unique_id`.
 
-    `uninsured` is the area's share of households without insurance (default: the national figure).
+    `need` is the area's `scoring.insurance_need`: 0 (no affordability boost) unless coverage is low.
     """
-    uninsured = settings.uninsured_share_default if uninsured is None else uninsured
     by_facility: dict[str, list[dict]] = {}
     for hit in hits:
         if hit["label"] in ("direct", "related"):
             by_facility.setdefault(hit["unique_id"], []).append(hit)
     results = [
-        build_result(facilities[uid], facility_hits, place, urgency, settings, uninsured)
+        build_result(facilities[uid], facility_hits, place, urgency, settings, need)
         for uid, facility_hits in by_facility.items()
         if uid in facilities
     ]
@@ -186,10 +185,9 @@ def score_facilities(
 
 
 def build_result(
-    facility: dict, hits: list[dict], place: Place, urgency: str, settings: Settings = DEFAULT, uninsured: float | None = None
+    facility: dict, hits: list[dict], place: Place, urgency: str, settings: Settings = DEFAULT, need: float = 0.0
 ) -> dict:
-    uninsured = settings.uninsured_share_default if uninsured is None else uninsured
-    affordability = scoring.affordability_factor(facility.get("affordability"), uninsured, settings)
+    affordability = scoring.affordability_factor(facility.get("affordability"), need, settings)
     distance = scoring.haversine_km(place.lat, place.lon, facility["latitude"], facility["longitude"])
     evidence = scoring.service_evidence(hits, settings)
     confidence = facility.get("confidence_score")

@@ -50,16 +50,17 @@ def distance_decay(distance_km: float, urgency: str, settings: Settings = DEFAUL
     return math.exp(-distance_km / d0)
 
 
-def uninsured_share(insurance_pct: float | None, settings: Settings = DEFAULT) -> float:
-    """The share of households without insurance; the national figure when the area has none."""
+def insurance_need(insurance_pct: float | None, settings: Settings = DEFAULT) -> float:
+    """0 at or above `low_insurance_pct` or with no NFHS-5 figure, rising to 1 where no household is insured."""
     if insurance_pct is None:
-        return settings.uninsured_share_default
-    return min(max(1.0 - insurance_pct / 100.0, 0.0), 1.0)
+        return 0.0
+    threshold = settings.low_insurance_pct
+    return min(max((threshold - insurance_pct) / threshold, 0.0), 1.0)
 
 
-def affordability_factor(tier: str | None, uninsured: float, settings: Settings = DEFAULT) -> float:
-    """1 for a Facility with no free or low-cost tier; up to 1 + `affordability_max_boost`."""
-    return 1.0 + settings.affordability_max_boost * settings.affordability_values.get(tier, 0.0) * uninsured
+def affordability_factor(tier: str | None, need: float, settings: Settings = DEFAULT) -> float:
+    """1 for a Facility with no free or low-cost tier, or where `need` is 0; up to 1 + `affordability_max_boost`."""
+    return 1.0 + settings.affordability_max_boost * settings.affordability_values.get(tier, 0.0) * need
 
 
 def rank_score(
