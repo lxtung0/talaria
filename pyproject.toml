@@ -11,6 +11,15 @@ dependencies = []
 dev = [
     "pyspark==3.5.*",
     "pytest>=8",
+    {include-group = "app"},
+]
+# The care finder app (spec #26); app/requirements.txt lists the same packages for the deploy.
+app = [
+    "databricks-sdk>=0.40",
+    "h3>=4,<5",
+    "streamlit>=1.40",
+    "pydeck>=0.9",
+    "mlflow-skinny>=2.20",
 ]
 
 [tool.uv]

@@ -62,9 +62,9 @@ spark.sql(f"ALTER TABLE {APP['facility_items']} SET TBLPROPERTIES (delta.enableC
 # COMMAND ----------
 
 counts = spark.table(APP["facility_items"]).groupBy("item_type").count().orderBy("item_type").collect()
-for row in counts:
-    print(f"{row.item_type:<22}{row['count']:>10,}")
-print(f"{'total':<22}{sum(r['count'] for r in counts):>10,}")
+summary = [f"{row.item_type:<22}{row['count']:>10,}" for row in counts]
+summary.append(f"{'total':<22}{sum(r['count'] for r in counts):>10,}")
+print("\n".join(summary))
 
 # COMMAND ----------
 
@@ -119,6 +119,7 @@ else:
 for _ in range(10):
     status = w.vector_search_indexes.get_index(APP_VS_INDEX).status
     print(f"ready={status.ready} indexed_rows={status.indexed_row_count} {status.message}")
+summary.append(f"index ready={status.ready} indexed_rows={status.indexed_row_count} {status.message}")
     if status.ready:
         break
     time.sleep(30)
@@ -135,7 +136,12 @@ if w.vector_search_indexes.get_index(APP_VS_INDEX).status.ready:
         filters_json=json.dumps({"h3_r5": [patna_cell]}),
         num_results=10,
     )
-    for row in result.result.data_array:
-        print(row)
+    summary.append(f'"kidney machine" in Patna cell {patna_cell}:')
+    summary.extend(str(row) for row in result.result.data_array or [])
 else:
-    print(f"Index not ready yet; test query skipped (cell {patna_cell})")
+    summary.append(f"Index not ready yet; test query skipped (cell {patna_cell})")
+print("\n".join(summary))
+
+# COMMAND ----------
+
+dbutils.notebook.exit("\n".join(summary))
