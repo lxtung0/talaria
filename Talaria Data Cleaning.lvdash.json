@@ -1,0 +1,1401 @@
+{
+  "datasets": [
+    {
+      "name": "kpis",
+      "displayName": "Cleaning KPIs",
+      "queryLines": [
+        "SELECT\n",
+        "  (SELECT COUNT(*) FROM workspace.talaria.bronze_facilities) AS bronze_rows,\n",
+        "  (SELECT COUNT(*) FROM workspace.talaria.silver_facilities_stage3) AS final_rows,\n",
+        "  (SELECT COUNT(*) FROM workspace.talaria.bronze_facilities) - (SELECT COUNT(*) FROM workspace.talaria.silver_facilities_stage3) AS removed_rows,\n",
+        "  (SELECT COUNT_IF(flag_unverified) FROM workspace.talaria.silver_facilities_stage3) AS unverified_rows"
+      ]
+    },
+    {
+      "name": "stages",
+      "displayName": "Rows per cleaning stage",
+      "queryLines": [
+        "SELECT '01 · Bronze (raw)' AS stage, COUNT(*) AS row_count FROM workspace.talaria.bronze_facilities\n",
+        "UNION ALL SELECT '02 · Silver Base (objective cleaning)', COUNT(*) FROM workspace.talaria.silver_facilities_base\n",
+        "UNION ALL SELECT '03 · Silver Facilities (flags)', COUNT(*) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT '04 · Silver Stage 3 (rules)', COUNT(*) FROM workspace.talaria.silver_facilities_stage3"
+      ]
+    },
+    {
+      "name": "highlights",
+      "displayName": "Major cleaning actions",
+      "queryLines": [
+        "SELECT * FROM VALUES\n",
+        "  ('Literal \"null\" text → NULL (cells)', 54002),\n",
+        "  ('URL format normalization (cells)', 171123),\n",
+        "  ('UK → US spelling fixes (cells)', 31247),\n",
+        "  ('specialties list dedup (items)', 160769),\n",
+        "  ('phone number list dedup (items)', 56765),\n",
+        "  ('website list dedup (items)', 33351),\n",
+        "  ('state/city spelling fixes (rows)', 559),\n",
+        "  ('PIN format normalization (rows)', 156)\n",
+        "AS t(action, affected)"
+      ]
+    },
+    {
+      "name": "rule_log",
+      "displayName": "Stage 3 rule log",
+      "queryLines": [
+        "SELECT rule_id, output_column, rows_flagged_or_remaining\n",
+        "FROM workspace.talaria.silver_stage3_rule_counts"
+      ]
+    },
+    {
+      "name": "flags",
+      "displayName": "Facilities per flag",
+      "queryLines": [
+        "SELECT 'A · Contact' AS grp, 'Official phone missing from list' AS flag, COUNT_IF(flag_official_phone_not_in_list) AS flagged FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'A · Contact', 'Phone list without official number', COUNT_IF(flag_phone_list_without_official) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'A · Contact', 'Official website missing from list', COUNT_IF(flag_official_website_not_in_list) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'B · Scale', 'Bed/doctor ratio outlier', COUNT_IF(flag_bed_doctor_ratio_outlier) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'C · Specialty', 'Specialty-capability mismatch', COUNT_IF(flag_specialty_unsupported_by_capability) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'D · Description', 'Description mentions another state', COUNT_IF(flag_desc_mentions_other_state) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'E · Affiliation', 'Affiliation-operator conflict', COUNT_IF(flag_affiliation_operator_conflict) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'F · Sources', 'Has government source', COUNT_IF(flag_has_government_source) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'F · Sources', 'Own site among sources', COUNT_IF(flag_own_site_in_sources) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'F · Sources', 'Directory sources only', COUNT_IF(flag_only_directory_sources) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'F · Sources', 'Single source domain', COUNT_IF(flag_single_source_domain) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'G · Page update', 'Page update date unparsable', COUNT_IF(flag_page_update_unparsable) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'G · Page update', 'Future page update date', COUNT_IF(flag_future_page_update) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'H · Location', 'Coords far from written PIN', COUNT_IF(flag_coords_far_from_written_pin) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'H · Location', 'No same-prefix PIN nearby', COUNT_IF(flag_no_same_prefix_pin_nearby) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'H · Location', 'Multiple facilities share coords', COUNT_IF(flag_coords_shared) FROM workspace.talaria.silver_facilities\n",
+        "UNION ALL SELECT 'S3 · R0', 'Facility scale outlier (beds/doctors)', COUNT_IF(flag_facility_capacity_outlier) FROM workspace.talaria.silver_facilities_stage3\n",
+        "UNION ALL SELECT 'S3 · F1', 'Name-facilityType mismatch', COUNT_IF(flag_name_facilityType) FROM workspace.talaria.silver_facilities_stage3\n",
+        "UNION ALL SELECT 'S3 · C1', 'Unverified', COUNT_IF(flag_unverified) FROM workspace.talaria.silver_facilities_stage3\n",
+        "UNION ALL SELECT 'S3 · C2', 'Partial data', COUNT_IF(flag_partial) FROM workspace.talaria.silver_facilities_stage3\n",
+        "UNION ALL SELECT 'S3 · C3', 'Specialty unsupported', COUNT_IF(flag_specialty_unsupported) FROM workspace.talaria.silver_facilities_stage3\n",
+        "UNION ALL SELECT 'S3 · C4', 'Major field orphan', COUNT_IF(flag_major_orphan) FROM workspace.talaria.silver_facilities_stage3\n",
+        "UNION ALL SELECT 'S3 · C5', 'Parallel-category mismatch', COUNT_IF(flag_merge_different) FROM workspace.talaria.silver_facilities_stage3"
+      ]
+    },
+    {
+      "name": "ops_log",
+      "displayName": "Operations by stage (pipeline step logs)",
+      "queryLines": [
+        "-- per-stage operations, live from the pipeline step logs\n",
+        "SELECT '02 · Silver Base' AS stage, section AS detail, label AS action, `count` AS operations,\n",
+        "  CASE section WHEN 'rows' THEN 'rows' WHEN 'items_removed' THEN 'items' WHEN 'flags' THEN 'facilities' ELSE 'cells' END AS unit\n",
+        "FROM workspace.talaria_pipeline.silver_base_step_log\n",
+        "UNION ALL\n",
+        "SELECT '03 · Silver Facilities', `group`, flag, flagged, 'facilities'\n",
+        "FROM workspace.talaria_pipeline.silver_facilities_flag_log\n",
+        "UNION ALL\n",
+        "SELECT '05 · Stage 3', rule_id, output_column, rows_flagged_or_remaining, 'rows'\n",
+        "FROM workspace.talaria_pipeline.silver_stage3_rule_counts\n",
+        "WHERE output_column NOT IN ('outlier_reason', 'large_hospital_step_failed')"
+      ]
+    },
+    {
+      "name": "gold_kpis",
+      "displayName": "Gold scoring KPIs",
+      "queryLines": [
+        "SELECT\n",
+        "  (SELECT COUNT(*) FROM workspace.talaria_pipeline.gold_facilities) AS gold_rows,\n",
+        "  (SELECT ROUND(AVG(confidence_score), 2) FROM workspace.talaria_pipeline.gold_facilities) AS avg_score,\n",
+        "  (SELECT COUNT_IF(location_uncertain) FROM workspace.talaria_pipeline.gold_facilities) AS location_uncertain,\n",
+        "  (SELECT COUNT_IF(needs_investigation) FROM workspace.talaria_pipeline.gold_facilities) AS needs_investigation,\n",
+        "  (SELECT COUNT(*) FROM workspace.talaria.bronze_facilities) - (SELECT COUNT(*) FROM workspace.talaria_pipeline.gold_facilities) AS dropped_rows\n"
+      ]
+    },
+    {
+      "name": "score_dist",
+      "displayName": "Confidence score distribution",
+      "queryLines": [
+        "SELECT confidence_score, facilities FROM workspace.talaria_pipeline.gold_score_distribution\n",
+        "ORDER BY confidence_score"
+      ]
+    },
+    {
+      "name": "worst_tiers",
+      "displayName": "Facilities per worst tier",
+      "queryLines": [
+        "SELECT tier, facilities FROM workspace.talaria_pipeline.gold_worst_tier_log"
+      ]
+    },
+    {
+      "name": "rule_fires",
+      "displayName": "Scoring rules fired (Gold)",
+      "queryLines": [
+        "SELECT tier, rule, reason, fired FROM workspace.talaria_pipeline.gold_rule_fire_log\n",
+        "ORDER BY fired DESC"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "journey",
+      "displayName": "Cleaning Journey",
+      "layout": [
+        {
+          "widget": {
+            "name": "kpi_bronze",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "bronze_rows",
+                      "expression": "MAX(`bronze_rows`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "frame": {
+                "title": "Raw rows (Bronze)",
+                "showTitle": true
+              },
+              "encodings": {
+                "value": {
+                  "fieldName": "bronze_rows",
+                  "displayName": "Raw rows",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_final",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "final_rows",
+                      "expression": "MAX(`final_rows`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "frame": {
+                "title": "Final rows (Stage 3)",
+                "showTitle": true
+              },
+              "encodings": {
+                "value": {
+                  "fieldName": "final_rows",
+                  "displayName": "Final rows",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_removed",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "removed_rows",
+                      "expression": "MAX(`removed_rows`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "frame": {
+                "title": "Rows removed (duplicates & fragments)",
+                "showTitle": true
+              },
+              "encodings": {
+                "value": {
+                  "fieldName": "removed_rows",
+                  "displayName": "Rows removed",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_unverified",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "unverified_rows",
+                      "expression": "MAX(`unverified_rows`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "frame": {
+                "title": "Unverified facilities (C1)",
+                "showTitle": true
+              },
+              "encodings": {
+                "value": {
+                  "fieldName": "unverified_rows",
+                  "displayName": "Unverified facilities",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "stages_bar",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "stages",
+                  "fields": [
+                    {
+                      "name": "stage",
+                      "expression": "`stage`"
+                    },
+                    {
+                      "name": "row_count",
+                      "expression": "SUM(`row_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "frame": {
+                "title": "Row count by cleaning stage",
+                "showTitle": true
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "stage",
+                  "displayName": "Stage",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "row_count",
+                  "displayName": "Rows",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "highlights_bar",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "highlights",
+                  "fields": [
+                    {
+                      "name": "action",
+                      "expression": "`action`"
+                    },
+                    {
+                      "name": "affected",
+                      "expression": "SUM(`affected`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "frame": {
+                "title": "Major cleaning actions (run of 2026-11-22)",
+                "showTitle": true
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "affected",
+                  "displayName": "Cleaned count",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "action",
+                  "displayName": "Action",
+                  "scale": {
+                    "type": "categorical",
+                    "categorySize": {
+                      "type": "number-of-categories",
+                      "number": 10
+                    },
+                    "sort": {
+                      "by": "measure-reversed",
+                      "measure": {
+                        "fieldName": "affected"
+                      }
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 6,
+            "height": 7
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "rules",
+      "displayName": "Rules & Flags",
+      "layout": [
+        {
+          "widget": {
+            "name": "rules_bar",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "rule_log",
+                  "fields": [
+                    {
+                      "name": "rule_id",
+                      "expression": "`rule_id`"
+                    },
+                    {
+                      "name": "rows_flagged",
+                      "expression": "SUM(`rows_flagged_or_remaining`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`output_column` NOT LIKE 'outlier_reason' AND `output_column` <> 'large_hospital_step_failed'"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "frame": {
+                "title": "Stage 3 rows flagged per rule",
+                "showTitle": true
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "rule_id",
+                  "displayName": "Rule",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "rows_flagged",
+                  "displayName": "Flagged rows",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "flags_bar",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "flags",
+                  "fields": [
+                    {
+                      "name": "flag",
+                      "expression": "`flag`"
+                    },
+                    {
+                      "name": "grp",
+                      "expression": "`grp`"
+                    },
+                    {
+                      "name": "flagged",
+                      "expression": "SUM(`flagged`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "frame": {
+                "title": "Facilities per flag (A–H groups + Stage 3 rules)",
+                "showTitle": true
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "flagged",
+                  "displayName": "Facilities",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "flag",
+                  "displayName": "Flag",
+                  "scale": {
+                    "type": "categorical",
+                    "categorySize": {
+                      "type": "number-of-categories",
+                      "number": 24
+                    },
+                    "sort": {
+                      "by": "measure-reversed",
+                      "measure": {
+                        "fieldName": "flagged"
+                      }
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "grp",
+                  "displayName": "Group",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "rule_log_table",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "rule_log",
+                  "fields": [
+                    {
+                      "name": "rule_id",
+                      "expression": "`rule_id`"
+                    },
+                    {
+                      "name": "output_column",
+                      "expression": "`output_column`"
+                    },
+                    {
+                      "name": "rows_flagged_or_remaining",
+                      "expression": "SUM(`rows_flagged_or_remaining`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "frame": {
+                "title": "Full Stage 3 rule log (18 rows)",
+                "showTitle": true
+              },
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "rule_id",
+                    "displayName": "Rule"
+                  },
+                  {
+                    "fieldName": "output_column",
+                    "displayName": "Output column"
+                  },
+                  {
+                    "fieldName": "rows_flagged_or_remaining",
+                    "displayName": "Flagged/remaining rows"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 12,
+            "height": 6
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "operations",
+      "displayName": "Stage Operations",
+      "layout": [
+        {
+          "widget": {
+            "name": "ops_table",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "ops_log",
+                  "fields": [
+                    {
+                      "name": "stage",
+                      "expression": "`stage`"
+                    },
+                    {
+                      "name": "detail",
+                      "expression": "`detail`"
+                    },
+                    {
+                      "name": "unit",
+                      "expression": "`unit`"
+                    },
+                    {
+                      "name": "action",
+                      "expression": "`action`"
+                    },
+                    {
+                      "name": "operations",
+                      "expression": "SUM(`operations`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "frame": {
+                "title": "All operations by stage (from pipeline step logs)",
+                "showTitle": true
+              },
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "stage",
+                    "displayName": "Stage"
+                  },
+                  {
+                    "fieldName": "detail",
+                    "displayName": "Detail"
+                  },
+                  {
+                    "fieldName": "unit",
+                    "displayName": "Unit"
+                  },
+                  {
+                    "fieldName": "action",
+                    "displayName": "Action"
+                  },
+                  {
+                    "fieldName": "operations",
+                    "displayName": "Operations"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "ops_cells_bar",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "ops_log",
+                  "fields": [
+                    {
+                      "name": "action",
+                      "expression": "`action`"
+                    },
+                    {
+                      "name": "unit",
+                      "expression": "`unit`"
+                    },
+                    {
+                      "name": "operations",
+                      "expression": "SUM(`operations`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`stage` IN ('02 · Silver Base')"
+                    },
+                    {
+                      "expression": "`unit` IN ('cells', 'items')"
+                    },
+                    {
+                      "expression": "`action` NOT LIKE '%unchanged'"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "frame": {
+                "title": "Silver Base — cells fixed & list items removed",
+                "showTitle": true
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "operations",
+                  "displayName": "Count",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "action",
+                  "displayName": "Action",
+                  "scale": {
+                    "type": "categorical",
+                    "categorySize": {
+                      "type": "number-of-categories",
+                      "number": 30
+                    },
+                    "sort": {
+                      "by": "measure-reversed",
+                      "measure": {
+                        "fieldName": "operations"
+                      }
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "unit",
+                  "displayName": "Unit",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "ops_rows_bar",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "ops_log",
+                  "fields": [
+                    {
+                      "name": "action",
+                      "expression": "`action`"
+                    },
+                    {
+                      "name": "operations",
+                      "expression": "SUM(`operations`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`stage` IN ('02 · Silver Base')"
+                    },
+                    {
+                      "expression": "`unit` IN ('rows')"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "frame": {
+                "title": "Silver Base — rows in / rows out",
+                "showTitle": true
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "operations",
+                  "displayName": "Rows",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "action",
+                  "displayName": "Step",
+                  "scale": {
+                    "type": "categorical",
+                    "categorySize": {
+                      "type": "number-of-categories",
+                      "number": 10
+                    },
+                    "sort": {
+                      "by": "measure-reversed",
+                      "measure": {
+                        "fieldName": "operations"
+                      }
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 7,
+            "width": 6,
+            "height": 7
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "scoring",
+      "displayName": "Gold Scoring",
+      "layout": [
+        {
+          "widget": {
+            "name": "kpi_gold_rows",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "gold_kpis",
+                  "fields": [
+                    {
+                      "name": "gold_rows",
+                      "expression": "MAX(`gold_rows`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "frame": {
+                "title": "Gold facilities (after cleaning & veterinary filter)",
+                "showTitle": true
+              },
+              "encodings": {
+                "value": {
+                  "fieldName": "gold_rows",
+                  "displayName": "Gold facilities",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_avg_score",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "gold_kpis",
+                  "fields": [
+                    {
+                      "name": "avg_score",
+                      "expression": "MAX(`avg_score`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "frame": {
+                "title": "Average confidence score (0–1)",
+                "showTitle": true
+              },
+              "encodings": {
+                "value": {
+                  "fieldName": "avg_score",
+                  "displayName": "Avg score",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_location",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "gold_kpis",
+                  "fields": [
+                    {
+                      "name": "location_uncertain",
+                      "expression": "MAX(`location_uncertain`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "frame": {
+                "title": "Location uncertain (any group H flag)",
+                "showTitle": true
+              },
+              "encodings": {
+                "value": {
+                  "fieldName": "location_uncertain",
+                  "displayName": "Location uncertain",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_dropped",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "gold_kpis",
+                  "fields": [
+                    {
+                      "name": "dropped_rows",
+                      "expression": "MAX(`dropped_rows`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "frame": {
+                "title": "Rows dropped Bronze → Gold (dupes, fragments, veterinary)",
+                "showTitle": true
+              },
+              "encodings": {
+                "value": {
+                  "fieldName": "dropped_rows",
+                  "displayName": "Rows dropped",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "score_dist_bar",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "score_dist",
+                  "fields": [
+                    {
+                      "name": "confidence_score",
+                      "expression": "`confidence_score`"
+                    },
+                    {
+                      "name": "facilities",
+                      "expression": "SUM(`facilities`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "frame": {
+                "title": "Confidence score distribution (facilities per score)",
+                "showTitle": true
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "confidence_score",
+                  "displayName": "Confidence score",
+                  "scale": {
+                    "type": "categorical",
+                    "categorySize": {
+                      "type": "number-of-categories",
+                      "number": 40
+                    },
+                    "sort": {
+                      "by": "natural-order"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "facilities",
+                  "displayName": "Facilities",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 7,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "worst_tier_bar",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "worst_tiers",
+                  "fields": [
+                    {
+                      "name": "tier",
+                      "expression": "`tier`"
+                    },
+                    {
+                      "name": "facilities",
+                      "expression": "SUM(`facilities`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "frame": {
+                "title": "Facilities per worst tier (the tier that caps the score)",
+                "showTitle": true
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "tier",
+                  "displayName": "Worst tier",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "natural-order"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "facilities",
+                  "displayName": "Facilities",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 7,
+            "y": 3,
+            "width": 5,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "rule_fire_bar",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "rule_fires",
+                  "fields": [
+                    {
+                      "name": "rule",
+                      "expression": "`rule`"
+                    },
+                    {
+                      "name": "tier",
+                      "expression": "`tier`"
+                    },
+                    {
+                      "name": "fired",
+                      "expression": "SUM(`fired`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "frame": {
+                "title": "Scoring rules — facilities where each flag fired",
+                "showTitle": true
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "fired",
+                  "displayName": "Facilities",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "rule",
+                  "displayName": "Flag column",
+                  "scale": {
+                    "type": "categorical",
+                    "categorySize": {
+                      "type": "number-of-categories",
+                      "number": 30
+                    },
+                    "sort": {
+                      "by": "measure-reversed",
+                      "measure": {
+                        "fieldName": "fired"
+                      }
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "tier",
+                  "displayName": "Tier",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 7,
+            "height": 10
+          }
+        },
+        {
+          "widget": {
+            "name": "rule_fire_table",
+            "queries": [
+              {
+                "name": "main",
+                "query": {
+                  "datasetName": "rule_fires",
+                  "fields": [
+                    {
+                      "name": "tier",
+                      "expression": "`tier`"
+                    },
+                    {
+                      "name": "rule",
+                      "expression": "`rule`"
+                    },
+                    {
+                      "name": "fired",
+                      "expression": "SUM(`fired`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "frame": {
+                "title": "Scoring rule log (tier · flag column · facilities fired)",
+                "showTitle": true
+              },
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "tier",
+                    "displayName": "Tier"
+                  },
+                  {
+                    "fieldName": "rule",
+                    "displayName": "Flag column"
+                  },
+                  {
+                    "fieldName": "fired",
+                    "displayName": "Facilities"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main"
+              }
+            }
+          },
+          "position": {
+            "x": 7,
+            "y": 11,
+            "width": 5,
+            "height": 10
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ]
+}
