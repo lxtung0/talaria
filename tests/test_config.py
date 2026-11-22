@@ -20,3 +20,7 @@ def test_app_tables_are_all_app_prefixed():
     from config import APP, APP_VS_INDEX
 
     assert all(name.startswith("workspace.talaria.app_") for name in [*APP.values(), APP_VS_INDEX])
+
+
+def test_silver_nfhs5_has_its_own_table_name():
+    assert SILVER["nfhs5"] == "workspace.talaria.silver_nfhs5"
