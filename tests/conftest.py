@@ -49,6 +49,8 @@ def spark():
         SparkSession.builder.master("local[1]")
         .appName("talaria-tests")
         .config("spark.sql.shuffle.partitions", "1")
+        # Adaptive query execution only re-plans for big data; on tiny fixtures it is overhead.
+        .config("spark.sql.adaptive.enabled", "false")
         .config("spark.ui.enabled", "false")
         .config("spark.sql.session.timeZone", "UTC")
         .getOrCreate()
@@ -104,7 +106,7 @@ PINCODES_SCHEMA = T.StructType(
 )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def make_pincodes(spark):
     """Build a fake bronze pincode directory from `(pincode, district, statename)` post offices.
 
@@ -123,7 +125,7 @@ def make_pincodes(spark):
     return build
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def no_pincodes(make_pincodes):
     """An empty pincode directory, for tests that don't exercise the state check."""
     return make_pincodes()

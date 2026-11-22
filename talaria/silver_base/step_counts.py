@@ -5,8 +5,8 @@
 never has to report on itself. The notebook prints the result with
 `format_step_counts`.
 
-It reuses the pipeline's column lists and per-value rules (package internals)
-so the counts describe exactly the columns and rules Silver base applies.
+The columns and per-value rules come from `columns.py`, the same tables the
+pipeline applies, so the counts describe exactly what Silver base does.
 """
 
 from collections.abc import Callable
@@ -15,9 +15,8 @@ from pyspark.sql import Column, DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
 
-from talaria.silver_base import formatting, spelling
-from talaria.silver_base.pipeline import _DROPPED_COLUMNS, _LIST_COLUMNS, _RENAMES, _as_array
-from talaria.silver_base.text import _EMAIL_PLACEHOLDER, clean_text, normalize_whitespace
+from talaria.silver_base import columns, spelling, state_check
+from talaria.silver_base.text import clean_item, clean_list_text, clean_text, missing_spelling, normalize_whitespace
 
 Counts = dict[str, dict[str, int]]
 
@@ -35,83 +34,87 @@ def step_counts(bronze: DataFrame, silver: DataFrame) -> Counts:
 
     `silver` must be `build_silver_base(bronze, pincodes)`.
     """
-    bronze_rows = bronze.count()
-    real = bronze.where(F.col("source_urls").isNotNull())
-    real_rows = real.count()
-    kept = real.distinct()
-    distinct_rows = kept.count()
+    # Bronze row counts: two Spark jobs.
+    raw_counts = bronze.agg(
+        F.count(F.lit(1)).alias("bronze"), F.count(F.when(~columns.is_description_fragment(), 1)).alias("real")
+    ).first()
+    facilities = bronze.where(~columns.is_description_fragment()).distinct()
+    facility_rows = facilities.count()
 
     # Bronze row next to its Silver base row; Silver base columns are prefixed `silver.`.
     silver_prefixed = silver.select([F.col(f"`{c}`").alias(f"silver.{c}") for c in silver.columns])
-    paired = kept.join(silver_prefixed, kept["unique_id"] == silver_prefixed["`silver.unique_id`"])
+    paired = facilities.join(silver_prefixed, facilities["unique_id"] == silver_prefixed["`silver.unique_id`"])
 
-    counts = {
-        "rows": {
-            "bronze": bronze_rows,
-            "description_fragments_removed": bronze_rows - real_rows,
-            "exact_duplicates_removed": real_rows - distinct_rows,
-            "silver_base": silver.count(),
-        },
-        "nulls": _nulls(paired, kept),
-        "items_removed": _items_removed(paired),
-        "spelling_fixes": _spelling_fixes(kept),
-        "formatting": _formatting(kept),
-        "flags": _flags(silver),
-        "state_check": _state_check(paired),
+    # Every other count, in one Spark job over the paired rows.
+    sections = {
+        "nulls": _nulls(facilities),
+        "items_removed": _items_removed(),
+        "spelling_fixes": _spelling_fixes(),
+        "formatting": _formatting(),
+        "flags": _flags(),
+        "state_check": _state_check(),
     }
-    return counts
+    row = paired.agg(
+        F.count(F.col("`silver.unique_id`")).alias("silver_base"),
+        *[count.alias(f"{section}:{label}") for section, counts in sections.items() for label, count in counts.items()],
+    ).first()
+
+    return {
+        "rows": {
+            "bronze": raw_counts.bronze,
+            "description_fragments_removed": raw_counts.bronze - raw_counts.real,
+            "exact_duplicates_removed": raw_counts.real - facility_rows,
+            "silver_base": row.silver_base,
+        },
+        **{
+            section: {label: row[f"{section}:{label}"] or 0 for label in counts}
+            for section, counts in sections.items()
+        },
+    }
+
+
+# Each section below is {label: aggregate Column} over the paired bronze and Silver base rows.
 
 
 def _silver(name: str) -> Column:
     """The Silver base column that bronze column `name` became."""
-    return F.col(f"`silver.{_RENAMES.get(name, name)}`")
+    return F.col(f"`silver.{columns.output_name(name)}`")
 
 
 _MISSING_TYPES = ["null_text", "empty_text", "empty_array_text", "hidden_email"]
 
 
-def _nulls(paired: DataFrame, kept: DataFrame) -> dict[str, int]:
+def _nulls(facilities: DataFrame) -> dict[str, Column]:
     text_columns = [
         f.name
-        for f in kept.schema.fields
-        if isinstance(f.dataType, T.StringType) and f.name not in _DROPPED_COLUMNS
+        for f in facilities.schema.fields
+        if isinstance(f.dataType, T.StringType) and f.name not in columns.DROPPED_COLUMNS
     ]
-    missing_type = {name: _missing_type(F.col(name), list_column=name in _LIST_COLUMNS) for name in text_columns}
+    missing_type = {name: missing_spelling(normalize_whitespace(F.col(name))) for name in text_columns}
     list_emptied = [
         F.when(F.col(name).isNotNull() & missing_type[name].isNull() & _silver(name).isNull(), 1)
-        for name in _LIST_COLUMNS
+        for name in columns.LIST_COLUMNS
     ]
-    row = paired.agg(
-        *[
-            sum((F.count(F.when(type_ == t, 1)) for type_ in missing_type.values()), F.lit(0)).alias(t)
+    return {
+        **{
+            t: sum((F.count(F.when(type_ == t, 1)) for type_ in missing_type.values()), F.lit(0))
             for t in _MISSING_TYPES
-        ],
-        sum((F.count(c) for c in list_emptied), F.lit(0)).alias("list_empty_after_cleanup"),
-        F.count(F.when(F.expr("try_cast(numberDoctors AS int)") == 0, 1)).alias("zero_doctors"),
-    ).first()
-    return row.asDict()
+        },
+        "list_empty_after_cleanup": sum((F.count(c) for c in list_emptied), F.lit(0)),
+        "zero_doctors": F.count(F.when(F.expr("try_cast(numberDoctors AS int)") == 0, 1)),
+    }
 
 
-def _items_removed(paired: DataFrame) -> dict[str, int]:
+def _items_removed() -> dict[str, Column]:
     """Bronze items minus Silver base items, per list column: empty and Duplicate items removed.
 
     A whole Missing value is a NULL, not an item, so it counts zero items.
     """
-    row = paired.agg(
-        *[
-            (
-                F.sum(
-                    F.when(
-                        _missing_type(F.col(name), list_column=True).isNull(),
-                        _item_count(_as_array(normalize_whitespace(F.col(name)))),
-                    )
-                )
-                - F.sum(_item_count(_silver(name)))
-            ).alias(name)
-            for name in _LIST_COLUMNS
-        ]
-    ).first()
-    return {_RENAMES.get(name, name): row[name] or 0 for name in _LIST_COLUMNS}
+    return {
+        columns.output_name(name): F.sum(_item_count(columns.parse_list(clean_list_text(F.col(name)))))
+        - F.sum(_item_count(_silver(name)))
+        for name in columns.LIST_COLUMNS
+    }
 
 
 def _item_count(items: Column) -> Column:
@@ -119,83 +122,48 @@ def _item_count(items: Column) -> Column:
     return F.coalesce(F.when(items.isNotNull(), F.size(items)), F.lit(0))
 
 
-# Per alias table (British spelling once per list column): the bronze column, its
-# Spelling fix rule, and what the value would be without any alias (the rule's
-# plain case-shaping). A value whose rule output differs from that is a Spelling fix.
-_SPELLING_RULES: dict[str, tuple[str, Callable[[Column], Column], Callable[[Column], Column]]] = {
-    "facility_type": ("facilityTypeId", spelling.facility_type, F.lower),
-    "operator_type": ("operatorTypeId", spelling.operator_type, F.lower),
-    "affiliation_type": ("affiliationTypeIds", spelling.affiliation_type, F.lower),
-    "state": ("address_stateOrRegion", spelling.state, lambda v: v),
-    "city": ("address_city", spelling.city, F.initcap),
-    "british_spelling_specialties": ("specialties", spelling.american_spelling, lambda v: v),
-    "british_spelling_procedure": ("procedure", spelling.american_spelling, lambda v: v),
-    "british_spelling_equipment": ("equipment", spelling.american_spelling, lambda v: v),
-    "british_spelling_capability": ("capability", spelling.american_spelling, lambda v: v),
-}
+def _spelling_fixes() -> dict[str, Column]:
+    return {
+        table: _count_values(fix.column, lambda v, fix=fix: fix.fix(v) != fix.plain(v))
+        for table, fix in columns.SPELLING_FIXES.items()
+    }
 
 
-def _spelling_fixes(kept: DataFrame) -> dict[str, int]:
-    row = kept.agg(
-        *[
-            _count_values(name, lambda v, rule=rule, plain=plain: rule(v) != plain(v)).alias(table)
-            for table, (name, rule, plain) in _SPELLING_RULES.items()
-        ]
-    ).first()
-    return {table: row[table] or 0 for table in _SPELLING_RULES}
-
-
-# Formatted columns (spec #1, "Formatting"), by bronze name, with their rule.
-_FORMAT_RULES: dict[str, Callable[[Column], Column]] = {
-    "address_zipOrPostcode": formatting.format_pin,
-    "officialPhone": formatting.format_phone,
-    "phone_numbers": formatting.format_phone,
-    "email": formatting.format_email,
-    "officialWebsite": formatting.format_url,
-    "websites": formatting.format_url,
-    "facebookLink": formatting.format_url,
-}
-
-
-def _formatting(kept: DataFrame) -> dict[str, int]:
+def _formatting() -> dict[str, Column]:
     """Per formatted column, values (or items) the rule rewrote vs left as they were.
 
     "Unchanged" covers both values already in the standard format and values
     that could not be formatted.
     """
-    columns = []
-    for name, rule in _FORMAT_RULES.items():
-        out = _RENAMES.get(name, name)
-        columns.append(_count_values(name, lambda v, rule=rule: rule(v) != v).alias(f"{out}_formatted"))
-        columns.append(_count_values(name, lambda v, rule=rule: rule(v) == v).alias(f"{out}_unchanged"))
-    row = kept.agg(*columns).first()
-    return {key: value or 0 for key, value in row.asDict().items()}
+    counts = {}
+    for name, rule in columns.FORMATTING.items():
+        out = columns.output_name(name)
+        counts[f"{out}_formatted"] = _count_values(name, lambda v, rule=rule: rule(v) != v)
+        counts[f"{out}_unchanged"] = _count_values(name, lambda v, rule=rule: rule(v) == v)
+    return counts
 
 
-def _flags(silver: DataFrame) -> dict[str, int]:
+def _flags() -> dict[str, Column]:
     """Facilities with each flag set: Needs investigation, each Truncated list column, zero beds, the state check."""
-    list_columns = [_RENAMES.get(name, name) for name in _LIST_COLUMNS]
-    row = silver.agg(
-        F.count(F.when(F.col("needs_investigation"), 1)).alias("needs_investigation"),
-        *[
-            F.count(F.when(F.array_contains(F.col("truncated_columns"), name), 1)).alias(f"truncated_{name}")
-            for name in list_columns
-        ],
-        F.count(F.when(F.col("flag_zero_beds"), 1)).alias("zero_beds"),
-        *[F.count(F.when(F.col(f"flag_{name}"), 1)).alias(name) for name in _STATE_CHECK_FLAGS],
-    ).first()
-    return row.asDict()
+
+    def flagged(condition: Column) -> Column:
+        return F.count(F.when(condition, 1))
+
+    return {
+        "needs_investigation": flagged(F.col("`silver.needs_investigation`")),
+        **{
+            f"truncated_{name}": flagged(F.array_contains(F.col("`silver.truncated_columns`"), name))
+            for name in map(columns.output_name, columns.LIST_COLUMNS)
+        },
+        "zero_beds": flagged(F.col("`silver.flag_zero_beds`")),
+        **{flag.removeprefix("flag_"): flagged(F.col(f"`silver.{flag}`")) for flag in state_check.FLAGS},
+    }
 
 
-# The state check's flags (#9), without their `flag_` prefix.
-_STATE_CHECK_FLAGS = ["state_corrected", "pin_mismatch", "address_conflict", "pin_unverified"]
-
-
-def _state_check(paired: DataFrame) -> dict[str, int]:
+def _state_check() -> dict[str, Column]:
     """Facilities whose Silver base state differs from their Spelling-fixed bronze state."""
     fixed = spelling.state(clean_text(F.col("address_stateOrRegion")))
-    row = paired.agg(F.count(F.when(~fixed.eqNullSafe(_silver("address_stateOrRegion")), 1)).alias("n")).first()
-    return {"states_corrected": row.n}
+    return {"states_corrected": F.count(F.when(~fixed.eqNullSafe(_silver("address_stateOrRegion")), 1))}
 
 
 def _count_values(name: str, predicate: Callable[[Column], Column]) -> Column:
@@ -205,28 +173,12 @@ def _count_values(name: str, predicate: Callable[[Column], Column]) -> Column:
     whitespace normalized, Missing values NULL, lists parsed.
     """
     raw = F.col(name)
-    if name in _LIST_COLUMNS:
-        items = F.transform(_as_array(clean_text(raw, placeholder_anywhere=False)), lambda item: clean_text(item))
+    if name in columns.LIST_COLUMNS:
+        items = F.transform(columns.parse_list(clean_list_text(raw)), clean_item)
         matching = F.filter(items, lambda item: item.isNotNull() & predicate(item))
         return F.sum(_item_count(matching))
     value = clean_text(raw)
     return F.count(F.when(value.isNotNull() & predicate(value), 1))
-
-
-def _missing_type(raw: Column, *, list_column: bool) -> Column:
-    """Which Missing-value spelling a raw value has, or NULL when it is not Missing.
-
-    Mirrors the Missing-value rule: in a list column only a whole value equal to
-    the hidden-email placeholder is Missing (its items are judged one by one).
-    """
-    value = normalize_whitespace(raw)
-    placeholder = value == _EMAIL_PLACEHOLDER if list_column else value.contains(_EMAIL_PLACEHOLDER)
-    return (
-        F.when(F.lower(value) == "null", "null_text")
-        .when(value == "", "empty_text")
-        .when(value == "[]", "empty_array_text")
-        .when(placeholder, "hidden_email")
-    )
 
 
 def format_step_counts(counts: Counts) -> str:

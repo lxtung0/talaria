@@ -20,16 +20,19 @@ def format_phone(col: Column) -> Column:
     """`+91` followed by 10 digits; a toll-free number keeps its full digits after `+91`.
 
     Non-digits are removed, then: 12 digits starting `91` and toll-free numbers
-    (`91` then 1800 or 1860) get a leading `+`; 10 digits get `+91`. A 10-digit
-    value written with a leading `+` names another country code (`+2382247959`)
-    and, like anything else, keeps its original text.
+    (`91` then 1800 or 1860) get a leading `+`; 10 digits, and a toll-free number
+    written without `91` (1800 or 1860 then 7 digits), get `+91`, so both ways of
+    writing a number end up equal. A value written with a leading `+` but no `91`
+    names another country code (`+2382247959`, the US `+1 800 ...`) and, like
+    anything else, keeps its original text.
     """
     digits = F.regexp_replace(col, r"[^0-9]", "")
-    has_plus = col.startswith("+")
+    no_country_code = ~col.startswith("+")
     return (
         F.when(digits.rlike(r"^91(1800|1860)[0-9]+$"), F.concat(F.lit("+"), digits))
         .when(digits.rlike(r"^91[0-9]{10}$"), F.concat(F.lit("+"), digits))
-        .when(digits.rlike(r"^[0-9]{10}$") & ~has_plus, F.concat(F.lit("+91"), digits))
+        .when(digits.rlike(r"^[0-9]{10}$") & no_country_code, F.concat(F.lit("+91"), digits))
+        .when(digits.rlike(r"^(1800|1860)[0-9]{7}$") & no_country_code, F.concat(F.lit("+91"), digits))
         .otherwise(col)
     )
 

@@ -22,18 +22,47 @@ def normalize_whitespace(col: Column) -> Column:
     return F.regexp_replace(trimmed, rf"{_WHITESPACE}+", " ")
 
 
-def null_if_missing(col: Column, *, placeholder_anywhere: bool = True) -> Column:
-    """NULL for a Missing value: `null` (any case), `""`, `[]`, or the hidden-email placeholder.
+def _without_placeholder(col: Column) -> Column:
+    return normalize_whitespace(F.replace(col, F.lit(_EMAIL_PLACEHOLDER), F.lit("")))
 
-    Expects whitespace-normalized input. With `placeholder_anywhere`, a value that
-    merely contains the placeholder is Missing; without it, only a value that is
-    exactly the placeholder is (for raw list text, where #4 judges each item).
+
+def missing_spelling(col: Column) -> Column:
+    """Which Missing value a whitespace-normalized value is, or NULL when it is not one.
+
+    `hidden_email` when nothing but the hidden-email placeholder is left once it is
+    cut out; otherwise `null_text` (any case), `empty_text` or `empty_array_text`
+    for what is left.
     """
-    placeholder = col.contains(_EMAIL_PLACEHOLDER) if placeholder_anywhere else col == _EMAIL_PLACEHOLDER
-    missing = (F.lower(col) == "null") | (col == "") | (col == "[]") | placeholder
-    return F.when(missing, F.lit(None).cast("string")).otherwise(col)
+    rest = _without_placeholder(col)
+    return (
+        F.when(col.contains(_EMAIL_PLACEHOLDER) & (rest == ""), "hidden_email")
+        .when(F.lower(rest) == "null", "null_text")
+        .when(rest == "", "empty_text")
+        .when(rest == "[]", "empty_array_text")
+    )
 
 
-def clean_text(col: Column, *, placeholder_anywhere: bool = True) -> Column:
-    """Whitespace normalization, then Missing values to NULL: the full rule for one text value."""
-    return null_if_missing(normalize_whitespace(col), placeholder_anywhere=placeholder_anywhere)
+def clean_text(col: Column) -> Column:
+    """The full rule for one plain text value: whitespace normalized, the hidden-email
+    placeholder cut out, and a Missing value made NULL."""
+    value = normalize_whitespace(col)
+    return F.when(missing_spelling(value).isNull(), _without_placeholder(value))
+
+
+def clean_item(col: Column) -> Column:
+    """The rule for one list item: whitespace normalized; NULL when it is a Missing
+    value or holds the hidden-email placeholder at all (the item is dropped later)."""
+    value = normalize_whitespace(col)
+    return F.when(missing_spelling(value).isNull() & ~value.contains(_EMAIL_PLACEHOLDER), value)
+
+
+def clean_list_text(col: Column) -> Column:
+    """The rule for a list column's raw text, before it is parsed: whitespace normalized,
+    a Missing value made NULL. The placeholder inside it is left for `clean_item`."""
+    value = normalize_whitespace(col)
+    return F.when(missing_spelling(value).isNull(), value)
+
+
+def lookup(table: dict[str, str], key: Column) -> Column:
+    """The table's value for `key`, or NULL when `key` is not in it."""
+    return F.create_map(*[F.lit(x) for pair in table.items() for x in pair])[key]

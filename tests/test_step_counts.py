@@ -39,7 +39,7 @@ def test_values_set_to_null_by_type_of_missing_value(make_bronze, no_pincodes):
             "name": " NULL ",
             "address_city": " ",
             "description": "[]",
-            "officialWebsite": "see [email protected]",
+            "officialWebsite": "see [email protected]",  # placeholder cut out, "see" kept: not a NULL
             "numberDoctors": "0",
             "specialties": '["", " "]',
             "organization_type": "null",  # dropped column: not counted
@@ -51,7 +51,7 @@ def test_values_set_to_null_by_type_of_missing_value(make_bronze, no_pincodes):
         "null_text": 2,
         "empty_text": 1,
         "empty_array_text": 1,
-        "hidden_email": 2,
+        "hidden_email": 1,
         "list_empty_after_cleanup": 1,
         "zero_doctors": 1,
     }

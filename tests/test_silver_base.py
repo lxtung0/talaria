@@ -31,14 +31,14 @@ DROPPED_COLUMNS = {
     "engagement_metrics_n_followers", "engagement_metrics_n_likes",
     "organization_type", "post_metrics_most_recent_social_media_post_date",
     "post_metrics_post_count", "source", "coordinates", "content_table_id",
-    "source_types", "source_ids",
+    "source_types", "source_ids", "yearEstablished", "year_established",
 }
 
 
-def test_drops_the_sixteen_unused_columns(make_bronze, no_pincodes):
-    silver = build_silver_base(make_bronze({}), no_pincodes)
+def test_drops_the_seventeen_unused_columns(make_bronze, no_pincodes):
+    silver = build_silver_base(make_bronze({"yearEstablished": "1998"}), no_pincodes)
 
-    assert len(DROPPED_COLUMNS) == 16
+    assert len(DROPPED_COLUMNS - {"year_established"}) == 17
     assert DROPPED_COLUMNS.isdisjoint(silver.columns)
 
 
@@ -54,7 +54,7 @@ def test_output_columns_follow_the_rename_table(make_bronze, no_pincodes):
     assert silver.columns == [
         "unique_id", "source_content_id", "name", "phone_numbers",
         "official_phone", "email", "websites", "official_website",
-        "year_established", "facebook_link", "address_line1", "address_line2",
+        "facebook_link", "address_line1", "address_line2",
         "address_line3", "address_city", "address_state", "address_pincode",
         "facility_type", "operator_type", "affiliation_types", "description",
         "area", "number_doctors", "bed_count", "specialties", "procedure",
@@ -130,12 +130,41 @@ def test_missing_value_spellings_become_null(make_bronze, no_pincodes, missing):
     assert (row.address_city, row.official_phone, row.description) == (None, None, None)
 
 
-def test_a_value_containing_the_hidden_email_placeholder_becomes_null(make_bronze, no_pincodes):
-    bronze = make_bronze({"officialWebsite": "[email\u00a0protected]"}, {"officialWebsite": "Contact: [email protected]"})
+def test_a_value_that_is_only_the_hidden_email_placeholder_becomes_null(make_bronze, no_pincodes):
+    bronze = make_bronze(
+        {"officialWebsite": "[email\u00a0protected]"},
+        {"officialWebsite": " [email protected]  [email protected] "},
+    )
 
     websites = [row.official_website for row in build_silver_base(bronze, no_pincodes).collect()]
 
     assert websites == [None, None]
+
+
+def test_the_hidden_email_placeholder_is_cut_out_of_a_text_value_and_the_rest_kept(make_bronze, no_pincodes):
+    bronze = make_bronze(
+        {
+            "name": "City Hospital [email protected]",
+            "description": "Write to [email protected] or call  us.",
+            "address_line1": "12 MG Road, [email\u00a0protected]",
+        }
+    )
+
+    row = build_silver_base(bronze, no_pincodes).first()
+
+    assert (row.name, row.description, row.address_line1) == (
+        "City Hospital",
+        "Write to or call us.",
+        "12 MG Road,",
+    )
+
+
+def test_a_list_item_containing_the_hidden_email_placeholder_is_dropped(make_bronze, no_pincodes):
+    bronze = make_bronze({"capability": '["Email: [email protected]", "24x7 ICU"]'})
+
+    row = build_silver_base(bronze, no_pincodes).first()
+
+    assert row.capability == ["24x7 ICU"]
 
 
 def test_real_values_resembling_missing_spellings_are_kept(make_bronze, no_pincodes):
@@ -216,7 +245,6 @@ def test_month_year_page_updates_become_iso_dates_and_others_are_unchanged(make_
 def test_numeric_and_boolean_columns_are_converted_and_text_columns_stay_text(make_bronze, no_pincodes):
     bronze = make_bronze(
         {
-            "yearEstablished": "1998",
             "numberDoctors": "25",
             "capacity": "120",
             "distinct_social_media_presence_count": "3",
@@ -235,27 +263,26 @@ def test_numeric_and_boolean_columns_are_converted_and_text_columns_stay_text(ma
 
     types = {f.name: f.dataType.simpleString() for f in silver.schema.fields}
     assert {name: types[name] for name in [
-        "year_established", "number_doctors", "bed_count",
+        "number_doctors", "bed_count",
         "distinct_social_media_presence_count", "number_of_facts_about_the_organization",
         "area", "affiliated_staff_presence", "flag_zero_beds", "latitude", "longitude",
         "recency_of_page_update", "address_pincode", "official_phone",
     ]} == {
-        "year_established": "int", "number_doctors": "int", "bed_count": "int",
+        "number_doctors": "int", "bed_count": "int",
         "distinct_social_media_presence_count": "int", "number_of_facts_about_the_organization": "int",
         "area": "double", "affiliated_staff_presence": "boolean", "flag_zero_beds": "boolean",
         "latitude": "double", "longitude": "double",
         "recency_of_page_update": "string", "address_pincode": "string", "official_phone": "string",
     }
     row = silver.first()
-    assert (row.year_established, row.number_doctors, row.bed_count, row.area, row.affiliated_staff_presence) == (
-        1998, 25, 120, 1500.5, True,
+    assert (row.number_doctors, row.bed_count, row.area, row.affiliated_staff_presence) == (
+        25, 120, 1500.5, True,
     )
 
 
 @pytest.mark.parametrize(
     ("column", "value"),
     [
-        ("yearEstablished", "around 1998"),
         ("numberDoctors", "twenty"),
         ("capacity", "120 beds"),
         ("area", "1500 sq ft"),
@@ -270,11 +297,11 @@ def test_a_value_that_fails_to_convert_raises(make_bronze, no_pincodes, column, 
 
 
 def test_missing_values_in_typed_columns_become_null_without_raising(make_bronze, no_pincodes):
-    bronze = make_bronze({"yearEstablished": "null", "area": "", "affiliated_staff_presence": None})
+    bronze = make_bronze({"numberDoctors": "null", "area": "", "affiliated_staff_presence": None})
 
     row = build_silver_base(bronze, no_pincodes).first()
 
-    assert (row.year_established, row.area, row.affiliated_staff_presence) == (None, None, None)
+    assert (row.number_doctors, row.area, row.affiliated_staff_presence) == (None, None, None)
 
 
 LIST_COLUMNS = [
@@ -372,6 +399,14 @@ def test_items_differing_by_real_letters_stay_separate(make_bronze, no_pincodes)
 
     assert row.specialties == ["nephrology", "neurology"]
     assert row.procedure == ["IUI treatment", "IVF treatment", "type 1 diabetes", "type 2 diabetes"]
+
+
+def test_items_without_letters_or_digits_are_duplicates_only_when_identical(make_bronze, no_pincodes):
+    bronze = make_bronze({"procedure": '["-", "+", "s", "S", "+", "&", "-"]'})
+
+    row = build_silver_base(bronze, no_pincodes).first()
+
+    assert row.procedure == ["-", "+", "s", "S", "&"]
 
 
 def test_identifier_lists_dedupe_on_exact_equality_only(make_bronze, no_pincodes):
@@ -480,6 +515,10 @@ def test_pins_with_spaces_or_hyphens_become_six_digits_and_others_are_unchanged(
         ("(022) 2345 6789", "(022) 2345 6789"),
         ("+91 1800 123 4567", "+9118001234567"),
         ("91 1860 500 1066", "+9118605001066"),
+        ("1800 123 4567", "+9118001234567"),
+        ("1860-500-1066", "+9118605001066"),
+        ("+1 800 123 4567", "+1 800 123 4567"),  # a US toll-free number
+        ("1800 12 345", "1800 12 345"),  # too short for toll-free
         ("+2382247959", "+2382247959"),
         ("12345", "12345"),
     ],
@@ -531,7 +570,10 @@ def test_urls_get_a_lower_case_host_without_scheme_www_or_trailing_slash(make_br
 def test_format_only_variants_collapse_to_one_item(make_bronze, no_pincodes):
     bronze = make_bronze(
         {
-            "phone_numbers": '["+91 98765 43210", "098765 43210", "9876543210", "91-98765-43210"]',
+            "phone_numbers": (
+                '["+91 98765 43210", "098765 43210", "9876543210", "91-98765-43210", '
+                '"1800 123 4567", "+91 1800-123-4567"]'
+            ),
             "websites": '["https://www.CityHospital.in/", "cityhospital.in", "http://cityhospital.in/About"]',
             "email": '["Info@CityHospital.in", "info[at]cityhospital[dot]in"]',
         }
@@ -539,7 +581,7 @@ def test_format_only_variants_collapse_to_one_item(make_bronze, no_pincodes):
 
     row = build_silver_base(bronze, no_pincodes).first()
 
-    assert row.phone_numbers == ["+919876543210", "098765 43210"]
+    assert row.phone_numbers == ["+919876543210", "098765 43210", "+9118001234567"]
     assert row.websites == ["cityhospital.in", "cityhospital.in/About"]
     assert row.email == ["info@cityhospital.in"]
 
