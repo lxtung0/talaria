@@ -52,6 +52,8 @@ NEW_COLUMNS = [
     NewColumn("flag_major_orphan", "C4"),
     NewColumn("orphan_reason", "C4", "string"),
     NewColumn("flag_merge_different", "C5"),
+    # The facility text behind every true C2-C5 flag, for Gold to cite.
+    NewColumn("evidence_items", "C2-C5", "array<struct<rule:string,field:string,item:string,subject:string>>"),
 ]
 
 
