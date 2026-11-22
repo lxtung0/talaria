@@ -26,6 +26,7 @@ All table names live in [`config.py`](config.py). Notebooks import from it inste
 - **Gold**: `workspace.talaria.gold_*`, built from Silver Stage 3 by `notebooks/06_gold` (spec #37)
   - `workspace.talaria.gold_facilities`: one row per Facility, with `confidence_score` (0–1), its log `confidence_reasons`, the facility text behind each fired rule `confidence_citations`, and `location_uncertain`
   - `workspace.talaria.gold_facility_items`: one row per claim (specialty, procedure, equipment, capability, description sentence), verbatim
+  - `workspace.talaria.gold_district_cells`: one row per H3 res-5 cell with post offices, its NFHS-5 district (the one most of its offices are in) and household health insurance coverage, for the care finder to look up at runtime; built by `notebooks/09_gold_district_cells`
 
 Run notebooks in order:
 
@@ -36,6 +37,7 @@ Run notebooks in order:
 5. `06_gold`: Silver Stage 3 → both Gold tables. Runs the runtime checks (a failure stops the run before anything is written) and prints per-rule fire counts and the score distribution.
 6. `07_silver_nfhs5`: bronze NFHS-5 → Silver NFHS-5. Independent of the facility notebooks. Runs the runtime checks and prints, per indicator, how many districts are suppressed (`*`) or low-sample (`(x)`).
 7. `08_facility_districts`: Silver facilities, bronze pincodes and Silver NFHS-5 → each facility's NFHS-5 district. Runs the runtime checks and prints facilities per link method.
+8. `09_gold_district_cells`: bronze pincodes and Silver NFHS-5 → Gold district cells (needs `07`, not `08`). Runs the runtime checks and prints cell, border-cell and missing-insurance counts.
 
 ## Code
 
