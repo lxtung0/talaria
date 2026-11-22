@@ -1,6 +1,7 @@
 # Data files stay in Unity Catalog, not git
 *.csv
 !talaria/silver_stage3/reference/*.csv
+!talaria/district_link/reference/*.csv
 *.tsv
 *.parquet
 *.xlsx

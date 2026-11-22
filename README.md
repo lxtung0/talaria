@@ -20,6 +20,8 @@ All table names live in [`config.py`](config.py). Notebooks import from it inste
 - **Silver**: `workspace.talaria.silver_*`, cleaned, typed, de-duplicated
   - **Silver base**: `workspace.talaria.silver_facilities_base`, objective fixes only, built by `notebooks/02_silver_base`
   - **Silver facilities**: `workspace.talaria.silver_facilities`, Silver base plus flag columns, built by `notebooks/03_silver_facilities`
+  - **Silver NFHS-5**: `workspace.talaria.silver_nfhs5`, the NFHS-5 district health indicators, one typed row per district, built by `notebooks/07_silver_nfhs5`
+  - **Facility districts**: `workspace.talaria.silver_facility_districts`, each facility's NFHS-5 district (by PIN, else city, else unknown), built by `notebooks/08_facility_districts`
   - **Silver Stage 3**: `workspace.talaria.silver_facilities_stage3`, Silver facilities plus capacity, large-hospital and consistency flags, with its rule log in `workspace.talaria.silver_stage3_rule_counts`, built by `notebooks/05_silver_stage3`
 - **Gold**: `workspace.talaria.gold_*`, built from Silver Stage 3 by `notebooks/06_gold` (spec #37)
   - `workspace.talaria.gold_facilities`: one row per Facility, with `confidence_score` (0–1), its log `confidence_reasons`, the facility text behind each fired rule `confidence_citations`, and `location_uncertain`
@@ -32,6 +34,8 @@ Run notebooks in order:
 3. `03_silver_facilities`: Silver base, bronze facilities and bronze pincodes → Silver facilities. Runs the runtime checks (a failure stops the run before anything is written) and prints true/false counts per flag.
 4. `05_silver_stage3`: Silver facilities → Silver Stage 3. Prints the cross-tabs of the two Stage 2 flags it replaces, runs the runtime checks (a failure stops the run before anything is written), writes the table and its rule log, and shows sample rows for C2-C5.
 5. `06_gold`: Silver Stage 3 → both Gold tables. Runs the runtime checks (a failure stops the run before anything is written) and prints per-rule fire counts and the score distribution.
+6. `07_silver_nfhs5`: bronze NFHS-5 → Silver NFHS-5. Independent of the facility notebooks. Runs the runtime checks and prints, per indicator, how many districts are suppressed (`*`) or low-sample (`(x)`).
+7. `08_facility_districts`: Silver facilities, bronze pincodes and Silver NFHS-5 → each facility's NFHS-5 district. Runs the runtime checks and prints facilities per link method.
 
 ## Code
 
@@ -62,6 +66,8 @@ Run notebooks in order:
   - `search.py`: the expanding H3 ring loop; `labels.py`: the LLM check prompt, output validation and similarity fallback; `scoring.py`: hit values, noisy-OR, rank and bands; `reasons.py`: flag → fixed warning or ✓ line; `location.py`: PIN / district / city / coordinates parsing.
   - `settings.py`: every tunable number. `present.py`: the UI's text templates. `search_map.py`: the animated pydeck map.
 - `app/`: the Streamlit app (`app.py`, `app.yaml`, `requirements.txt`). `scripts/build_app.sh` bundles it with the package for deploy.
+- `talaria/silver_nfhs5/`: the Silver NFHS-5 module (#41). Its one public entry point is `build_silver_nfhs5(bronze_nfhs5_df) -> silver_nfhs5_df`, with the same no-reads, no-writes rule. Indicators become doubles; `*` (suppressed) is NULL and listed in `suppressed_columns`, `(x)` (low sample) is `x` and listed in `low_sample_columns`. `checks.py` holds the runtime checks, `marker_counts.py` the per-indicator marker counts.
+- `talaria/district_link/`: the district link (#44). Its one public entry point is `build_facility_districts(facilities_df, pincodes_df, silver_nfhs5_df) -> districts_df`, no reads or writes. `reference/district_aliases.csv` maps the pincode directory's district names to NFHS-5's 2019-21 ones; a district carved out since maps to its parent and is approximate. `checks.py` holds the runtime checks, `link_counts.py` the counts per link method.
 - Notebooks import the package and `config.py` from the repo root (`sys.path.insert(0, os.path.abspath(".."))`), so run them from the Databricks Git folder.
 - `tests/`: pytest tests that run against a local Spark session, no Databricks needed. `tests/conftest.py` has the `spark` fixture; `make_bronze`, which builds a small fake bronze facilities DataFrame from partial rows; `make_pincodes`, which builds a fake pincode directory from `(pincode, district, statename)` offices; `no_pincodes`, an empty directory for tests that don't exercise the state check; and `make_silver_inputs`, which builds matching bronze and Silver base inputs for the Silver facilities tests.
 
