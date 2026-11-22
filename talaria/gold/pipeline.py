@@ -3,13 +3,14 @@
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from talaria.gold import columns, items, scoring
+from talaria.gold import citations, columns, items, scoring
 
 
 def build_gold(silver_stage3: DataFrame) -> tuple[DataFrame, DataFrame]:
     """`(gold_facilities, gold_facility_items)` from Silver Stage 3.
 
-    Copied columns are verbatim; only the score, its log and `location_uncertain` are new.
+    Copied columns are verbatim; only the score, its log, its citations and
+    `location_uncertain` are new.
     Veterinary facilities are left out of both tables.
     """
     silver_stage3 = columns.in_scope(silver_stage3)
@@ -20,6 +21,7 @@ def build_gold(silver_stage3: DataFrame) -> tuple[DataFrame, DataFrame]:
     facilities = silver_stage3.select(
         *columns.COPIED_COLUMNS,
         *[column.alias(name) for name, column in scoring.score_columns().items()],
+        citations.citations_column(dict(silver_stage3.dtypes)).alias("confidence_citations"),
         location_uncertain.alias("location_uncertain"),
         "needs_investigation",
     ).select(*columns.GOLD_FACILITIES)

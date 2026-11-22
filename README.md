@@ -22,7 +22,7 @@ All table names live in [`config.py`](config.py). Notebooks import from it inste
   - **Silver facilities**: `workspace.talaria.silver_facilities`, Silver base plus flag columns, built by `notebooks/03_silver_facilities`
   - **Silver Stage 3**: `workspace.talaria.silver_facilities_stage3`, Silver facilities plus capacity, large-hospital and consistency flags, with its rule log in `workspace.talaria.silver_stage3_rule_counts`, built by `notebooks/05_silver_stage3`
 - **Gold**: `workspace.talaria.gold_*`, built from Silver Stage 3 by `notebooks/06_gold` (spec #37)
-  - `workspace.talaria.gold_facilities`: one row per Facility, with `confidence_score` (0–1), its log `confidence_reasons` and `location_uncertain`
+  - `workspace.talaria.gold_facilities`: one row per Facility, with `confidence_score` (0–1), its log `confidence_reasons`, the facility text behind each fired rule `confidence_citations`, and `location_uncertain`
   - `workspace.talaria.gold_facility_items`: one row per claim (specialty, procedure, equipment, capability, description sentence), verbatim
 
 Run notebooks in order:
@@ -53,7 +53,8 @@ Run notebooks in order:
   - `scoring.py`: the tiers (points and caps) and the rule table, one rule per scored flag ([ADR 0004](docs/adr/0004-gold-confidence-score.md)). To change a weight, edit `TIERS`; to move or add a flag, edit `RULES`.
   - `columns.py`: both table schemas, the contract with the app.
   - `items.py`: Table B, including the sentence split and its abbreviation list.
-  - `checks.py`: `check_gold(silver_stage3_df, gold_facilities_df, gold_facility_items_df)`, including a replay of every score from its log.
+  - `citations.py`: which facility text each rule cites: the fields a value rule compares, or Stage 3's `evidence_items` for C2-C5.
+  - `checks.py`: `check_gold(silver_stage3_df, gold_facilities_df, gold_facility_items_df)`, including a replay of every score from its log and a check that every cited `item_id` exists.
   - `score_counts.py`: per-rule fire counts, worst tier per Facility and the score distribution the notebook prints.
   - One module per step: `specialty_categories.py` (step 1), `capacity.py` (R0), `name_type.py` (F1), `large_hospital.py` (R1-R5), `consistency.py` (C1-C5); `text.py` holds the shared definitions.
 - `talaria/care_finder/`: the care finder app's logic (spec #26). `items.py` is the only Spark module: `build_app_tables(facilities) -> (app_facilities, app_facility_items)` for `03_app_tables`. The rest is plain Python, so the app imports it without Spark:

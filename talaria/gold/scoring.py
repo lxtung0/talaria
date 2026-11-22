@@ -85,13 +85,15 @@ RULES = [
     Rule("flag_page_update_unparsable", "minor", "The page update date can't be read"),
     Rule("flag_future_page_update", "minor", "The page update date is in the future"),
     Rule("needs_investigation", "minor", "Some lists were cut off at 50 items, so the record may be incomplete"),
+    # A procedure without the equipment it needs, or the reverse: an incomplete record, not a
+    # contradiction (equipment lists are sparse), so minor rather than major (agreed on #37).
+    Rule("flag_partial", "minor", "Some procedures are listed without matching equipment, or the reverse"),
     # positive: evidence that raises trust.
     Rule("flag_has_government_source", "positive", "A government website is among the sources"),
     Rule("flag_own_site_in_sources", "positive", "The facility's own website is among the sources"),
     Rule("flag_large_hospital", "positive", "A large hospital whose specialties, beds and doctors are consistent"),
     # info: missing information, logged but never scored (ADR 0002).
     Rule("flag_unverified", "info", "Procedures, equipment or capabilities are not listed"),
-    Rule("flag_partial", "info", "Some procedures are listed without matching equipment, or the reverse"),
 ]
 
 # Stage 3's capacity rule R0-5 (a hospital with exactly 1 doctor) alone is a placeholder

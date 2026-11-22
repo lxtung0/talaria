@@ -150,14 +150,20 @@ def test_one_doctor_alone_is_minor_and_any_other_capacity_rule_is_major(silver, 
 
 
 def test_missing_information_is_logged_but_not_scored(silver):
-    row = gold_row(silver({}), flag_unverified=True, flag_partial=True)
+    row = gold_row(silver({}), flag_unverified=True)
+
+    assert row.confidence_reasons == ["start 80", "0 [info] Procedures, equipment or capabilities are not listed"]
+    assert row.confidence_score == 0.80
+
+
+def test_a_procedure_without_its_equipment_is_minor(silver):
+    row = gold_row(silver({}), flag_partial=True)
 
     assert row.confidence_reasons == [
         "start 80",
-        "0 [info] Procedures, equipment or capabilities are not listed",
-        "0 [info] Some procedures are listed without matching equipment, or the reverse",
+        "-3 [minor] Some procedures are listed without matching equipment, or the reverse",
     ]
-    assert row.confidence_score == 0.80
+    assert row.confidence_score == 0.77
 
 
 def test_three_positives_stop_at_full_marks(silver):
@@ -296,3 +302,77 @@ def test_score_counts(tables):
     assert counts["worst_tier"] == {"critical": 1, "major": 0, "minor": 0, "none": 1}
     assert counts["scores"] == {0.55: 1, 0.8: 1}
     assert "flag_pin_unverified" in format_score_counts(counts)
+
+
+# confidence_citations: the facility text behind each fired rule.
+def cited(row):
+    return [(c.rule, c.field, c.item_id, c.text) for c in row.confidence_citations]
+
+
+def test_every_rule_says_what_it_cites():
+    from talaria.gold import citations
+
+    groups = [set(citations.CITED_FIELDS), set(citations.EVIDENCE_RULES), citations.NOTHING_TO_CITE]
+    assert set().union(*groups) == {rule.name for rule in scoring.RULES}
+    assert sum(len(group) for group in groups) == len(scoring.RULES)
+
+
+def test_no_fired_rule_cites_nothing(silver):
+    row = gold_row(silver({"name": "City Hospital", "address_zipOrPostcode": "600001"}))
+
+    assert row.confidence_citations == []
+
+
+def test_a_value_rule_cites_its_fields(silver):
+    row = gold_row(
+        silver({"name": "City Hospital", "address_zipOrPostcode": "600001", "address_stateOrRegion": "Kerala"}),
+        flag_pin_mismatch=True,
+    )
+
+    assert cited(row) == [
+        ("flag_pin_mismatch", "address_state", None, "Kerala"),
+        ("flag_pin_mismatch", "address_pincode", None, "600001"),
+    ]
+
+
+def test_a_list_value_is_cited_entry_by_entry(silver):
+    row = gold_row(
+        silver({"source_urls": '["https://a.example.org/x", "https://a.example.org/y"]'}),
+        flag_single_source_domain=True,
+    )
+
+    assert cited(row) == [
+        ("flag_single_source_domain", "source_urls", None, "https://a.example.org/x"),
+        ("flag_single_source_domain", "source_urls", None, "https://a.example.org/y"),
+    ]
+
+
+def test_a_stage3_text_rule_cites_the_matched_items_as_claims(silver):
+    df = silver({"unique_id": "f", "specialties": '["cardiology"]', "capability": '["Parking", "24x7 dialysis unit"]'})
+    facilities, items = build_gold(df.withColumn("flag_major_orphan", F.lit(True)))
+
+    row = facilities.first()
+    assert cited(row) == [("flag_major_orphan", "capability", "f:capability:1", "24x7 dialysis unit")]
+    claim = items.where(F.col("item_id") == "f:capability:1").first()
+    assert claim.item_text == "24x7 dialysis unit"
+
+
+def test_stage3_evidence_of_an_unscored_flag_is_not_cited(silver):
+    # Stage 3 found evidence, but the fixture keeps the flag false, so nothing fired.
+    row = gold_row(silver({"specialties": '["cardiology"]', "capability": '["24x7 dialysis unit"]'}))
+
+    assert row.confidence_citations == []
+
+
+def test_a_citation_of_an_unknown_item_fails(tables):
+    silver_df, facilities, items = tables
+    unknown = F.array(
+        F.struct(
+            F.lit("flag_partial").alias("rule"), F.lit("procedure").alias("field"),
+            F.lit("a:procedure:9").alias("item_id"), F.lit("Dialysis").alias("text"),
+        )
+    )
+    broken = facilities.withColumn("confidence_citations", unknown)
+
+    with pytest.raises(ValueError, match=r"2 citation\(s\) whose item_id isn't in gold_facility_items"):
+        check_gold(silver_df, broken, items)
