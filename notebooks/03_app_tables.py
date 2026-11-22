@@ -14,7 +14,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.abspath(".."))
-from config import APP, APP_EMBEDDING_MODEL, APP_SOURCE_FACILITIES, APP_VS_ENDPOINT, APP_VS_INDEX
+from config import APP, APP_EMBEDDING_MODEL, APP_SEARCH_PATH, APP_SOURCE_FACILITIES, APP_VS_ENDPOINT, APP_VS_INDEX
 
 from delta.tables import DeltaTable
 from pyspark.sql import functions as F
@@ -65,6 +65,30 @@ counts = spark.table(APP["facility_items"]).groupBy("item_type").count().orderBy
 summary = [f"{row.item_type:<22}{row['count']:>10,}" for row in counts]
 summary.append(f"{'total':<22}{sum(r['count'] for r in counts):>10,}")
 print("\n".join(summary))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Fallback: Delta embeddings
+# MAGIC Only when `APP_SEARCH_PATH = "delta"` in `config.py` (Free Edition refused the endpoint or index).
+# MAGIC Fills an `embedding` column once with `ai_query`, embedding each distinct text one time,
+# MAGIC and only for rows that don't have one yet. The Vector Search cells below are then skipped.
+
+# COMMAND ----------
+
+if APP_SEARCH_PATH == "delta":
+    if "embedding" not in spark.table(APP["facility_items"]).columns:
+        spark.sql(f"ALTER TABLE {APP['facility_items']} ADD COLUMNS (embedding ARRAY<FLOAT>)")
+    spark.sql(f"""
+        MERGE INTO {APP['facility_items']} t
+        USING (SELECT item_text, ai_query('{APP_EMBEDDING_MODEL}', item_text) AS embedding
+               FROM (SELECT DISTINCT item_text FROM {APP['facility_items']} WHERE embedding IS NULL)) s
+        ON t.item_text = s.item_text AND t.embedding IS NULL
+        WHEN MATCHED THEN UPDATE SET t.embedding = s.embedding""")
+    filled = spark.table(APP["facility_items"]).where("embedding IS NOT NULL").count()
+    summary.append(f"Delta fallback: {filled:,} items have embeddings")
+    print(summary[-1])
+    dbutils.notebook.exit("\n".join(summary))
 
 # COMMAND ----------
 

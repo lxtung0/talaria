@@ -57,6 +57,32 @@ Test cleaning rules only through `build_silver_base`: build a fake bronze DataFr
 
 Test Silver facilities rules only through `build_silver_facilities`: get `bronze, silver_base` from `make_silver_inputs(...)`, build with a fixed run date, check the output. Its runtime checks and flag counts are tested in `tests/test_silver_facilities_checks.py`.
 
+## Running the app
+
+The care finder (spec #26) is a Streamlit Databricks App, `talaria-care-finder`: a service and a location in, the best 3 Facilities out, each with verbatim quotes, warnings and a "How we decided" section.
+
+**Build its data** (once, and after the source table changes): run `notebooks/03_app_tables`. It writes `app_facilities` and `app_facility_items` and creates or syncs the Vector Search index `app_facility_items_index` on endpoint `talaria-vs`. `notebooks/04_recommend_demo` runs five demo queries through `recommend()`.
+
+**Local run** (uses your `DEFAULT` Databricks CLI profile):
+
+```sh
+uv sync
+uv run streamlit run app/app.py
+```
+
+**Deploy:** `./scripts/deploy_app.sh` stages `app/` plus `config.py` and `talaria/care_finder/` into `build/app`, syncs it to the workspace and deploys. It starts the app if it's stopped.
+
+**Stop / start** (the app uses Free Edition compute while running):
+
+```sh
+databricks apps stop talaria-care-finder
+databricks apps start talaria-care-finder   # then open the URL from: databricks apps get talaria-care-finder
+```
+
+**Switch the source table to Gold:** set `APP_SOURCE_FACILITIES` in `config.py` to the Gold table (it should have a `confidence_score` column; without one the app uses 0.5), re-run `03_app_tables`, then redeploy.
+
+**Tuning:** every scoring number and search setting is in `talaria/care_finder/settings.py`.
+
 ## Working in Databricks
 
 1. Link GitHub: profile icon → Settings → Linked accounts → GitHub.
