@@ -622,6 +622,112 @@ def test_british_specialty_spellings_become_american_keeping_their_case_shape(ma
     ]
 
 
+def test_british_spellings_in_procedure_equipment_and_capability_items_become_american(make_bronze):
+    bronze = make_bronze(
+        {
+            "procedure": '["Paediatric Surgery", "Haemodialysis"]',
+            "equipment": '["ORTHOPAEDIC TABLE"]',
+            "capability": '["Gynaecology ward"]',
+        }
+    )
+
+    row = build_silver_base(bronze).first()
+
+    assert row.procedure == ["Pediatric Surgery", "Hemodialysis"]
+    assert row.equipment == ["ORTHOPEDIC TABLE"]
+    assert row.capability == ["Gynecology ward"]
+
+
+BRITISH_TO_AMERICAN = [
+    ("Gynaeoncology", "Gyneoncology"),
+    ("Gynae Oncology OPD", "Gyne Oncology OPD"),
+    ("Caesarean section", "Cesarean section"),
+    ("ileocaecal resection", "ileocecal resection"),
+    ("Homoeopathy", "Homeopathy"),
+    ("obstructive sleep apnoea", "obstructive sleep apnea"),
+    ("GONORRHOEA TESTING", "GONORRHEA TESTING"),
+    ("coeliac disease", "celiac disease"),
+    ("faecal occult blood", "fecal occult blood"),
+    ("Leucoderma treatment", "Leukoderma treatment"),
+    ("Dyslipidaemia", "Dyslipidemia"),
+    ("Cancer Centre", "Cancer Center"),
+    ("patient-centred care", "patient-centered care"),
+    ("Modular Operation Theatres", "Modular Operation Theaters"),
+    ("Fibreoptic bronchoscope", "Fiberoptic bronchoscope"),
+    ("500 litres oxygen, 10 kilometres away", "500 liters oxygen, 10 kilometers away"),
+    ("Goitre surgery", "Goiter surgery"),
+    ("Small calibre needle", "Small caliber needle"),
+    ("Brain Tumours", "Brain Tumors"),
+    ("Labour room", "Labor room"),
+    ("Colour Doppler", "Color Doppler"),
+    ("behavioural therapy", "behavioral therapy"),
+    ("neighbouring districts", "neighboring districts"),
+    ("Honourary consultant", "Honorary consultant"),
+    ("favourable outcomes, endeavour", "favorable outcomes, endeavor"),
+    ("Vapouriser", "Vaporizer"),
+    ("In Vitro Fertilisation", "In Vitro Fertilization"),
+    ("Cardiac Catheterisation", "Cardiac Catheterization"),
+    ("Specialised and personalised care", "Specialized and personalized care"),
+    ("Computerised records, recognised by NABH", "Computerized records, recognized by NABH"),
+    ("Customised, randomised, standardised", "Customized, randomized, standardized"),
+    ("Sterilised instruments; steriliser", "Sterilized instruments; sterilizer"),
+    ("Nebuliser", "Nebulizer"),
+    ("Authorised, motorised, subsidised", "Authorized, motorized, subsidized"),
+    ("organised camps, modernised wards, mechanised", "organized camps, modernized wards, mechanized"),
+    ("digitised, sanitised, prioritising", "digitized, sanitized, prioritizing"),
+    ("necrotising fasciitis; luteinising hormone", "necrotizing fasciitis; luteinizing hormone"),
+    ("optimising and revolutionising care", "optimizing and revolutionizing care"),
+    ("practising doctors", "practicing doctors"),
+    ("Blood analyser, dialysers", "Blood analyzer, dialyzers"),
+    ("Multi Speciality Hospital", "Multi Specialty Hospital"),
+    ("Empanelled with CGHS", "Empaneled with CGHS"),
+    ("Counselling by a counsellor", "Counseling by a counselor"),
+    ("travelling, labelled, modelling", "traveling, labeled, modeling"),
+    ("Drug licence; defence personnel", "Drug license; defense personnel"),
+    ("Anti-ageing", "Anti-aging"),
+    ("Ear moulds; aluminium; sulphate", "Ear molds; aluminum; sulfate"),
+    ("Jewellery, jewellers", "Jewelry, jewelers"),
+    ("Cheque payment", "Check payment"),
+    ("analogue X-ray", "analog X-ray"),
+    ("enrolment; fulfilment", "enrollment; fulfillment"),
+    ("manoeuvres", "maneuvers"),
+]
+
+
+def test_british_spellings_become_american_across_the_text_list_columns(make_bronze):
+    items = [british for british, _ in BRITISH_TO_AMERICAN]
+    bronze = make_bronze({"capability": _json_list(items), "procedure": _json_list(items)})
+
+    row = build_silver_base(bronze).first()
+
+    expected = [american for _, american in BRITISH_TO_AMERICAN]
+    assert row.capability == expected
+    assert row.procedure == expected
+
+
+def test_american_words_and_deliberately_excluded_british_variants_are_unchanged(make_bronze):
+    items = [
+        "Aesthetic dermatology", "Anaesthetic-free aesthetics",  # aesthetic stays; anaesthe still fixed
+        "advised, supervised, advertised", "exercise, expertise, enterprise, premises",
+        "analyses of blood", "syphilis", "specialist", "compromised", "arising", "comparison",
+        "Diamond Harbour", "Sensititre plate", "antibody titre", "fertilityresearchcentre",
+        "programme for programmers", "cancelled; cancellation", "multistorey; storeys",
+        "lumbar disc", "grey", "Polisetty", "Parkinsonism", "multidisciplinary",
+    ]
+    bronze = make_bronze({"equipment": _json_list(items)})
+
+    row = build_silver_base(bronze).first()
+
+    assert row.equipment == [
+        "Aesthetic dermatology", "Anesthetic-free aesthetics",
+        "advised, supervised, advertised", "exercise, expertise, enterprise, premises",
+        "analyses of blood", "syphilis", "specialist", "compromised", "arising", "comparison",
+        "Diamond Harbour", "Sensititre plate", "antibody titre", "fertilityresearchcenter",
+        "programme for programmers", "cancelled; cancellation", "multistorey; storeys",
+        "lumbar disc", "grey", "Polisetty", "Parkinsonism", "multidisciplinary",
+    ]
+
+
 def test_specialty_spelling_fixes_run_before_duplicate_removal(make_bronze):
     bronze = make_bronze({"specialties": '["pediatricSurgery", "paediatricSurgery", "Haematology", "hematology"]'})
 

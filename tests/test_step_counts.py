@@ -90,6 +90,8 @@ def test_spelling_fixes_per_alias_table(make_bronze):
             "address_city": "Bangalore",
             "affiliationTypeIds": '["private-entity", "Private-Entity", "ngo"]',
             "specialties": '["paediatricCardiology", "cardiology"]',
+            "procedure": '["Tumour excision", "Labour care", "Dialysis"]',
+            "capability": '["Has a Paediatric ward"]',
         },
         {"facilityTypeId": "Hospital", "address_stateOrRegion": "Gurugram, Haryana", "address_city": "pune"},
         {"operatorTypeId": "Private", "address_stateOrRegion": "Haryana"},
@@ -102,7 +104,10 @@ def test_spelling_fixes_per_alias_table(make_bronze):
         "affiliation_type": 2,
         "state": 2,
         "city": 1,
-        "specialty": 1,
+        "british_spelling_specialties": 1,
+        "british_spelling_procedure": 2,
+        "british_spelling_equipment": 0,
+        "british_spelling_capability": 1,
     }
 
 

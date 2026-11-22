@@ -28,7 +28,7 @@ def step_counts(bronze: DataFrame, silver: DataFrame) -> Counts:
     - `rows`: bronze rows, Description fragments and Exact duplicates removed, Silver base rows.
     - `nulls`: values set to NULL, by the Missing-value spelling they had.
     - `items_removed`: empty and Duplicate items removed, per list column.
-    - `spelling_fixes`: values and list items changed, per alias table.
+    - `spelling_fixes`: values and list items changed, per alias table (British spelling per column).
     - `formatting`: values and list items formatted vs left unchanged, per formatted column.
     - `flags`: Facilities with each flag set.
 
@@ -117,16 +117,19 @@ def _item_count(items: Column) -> Column:
     return F.coalesce(F.when(items.isNotNull(), F.size(items)), F.lit(0))
 
 
-# Per alias table: the bronze column, its Spelling fix rule, and what the value
-# would be without any alias (the rule's plain case-shaping). A value whose rule
-# output differs from that is a Spelling fix.
+# Per alias table (British spelling once per list column): the bronze column, its
+# Spelling fix rule, and what the value would be without any alias (the rule's
+# plain case-shaping). A value whose rule output differs from that is a Spelling fix.
 _SPELLING_RULES: dict[str, tuple[str, Callable[[Column], Column], Callable[[Column], Column]]] = {
     "facility_type": ("facilityTypeId", spelling.facility_type, F.lower),
     "operator_type": ("operatorTypeId", spelling.operator_type, F.lower),
     "affiliation_type": ("affiliationTypeIds", spelling.affiliation_type, F.lower),
     "state": ("address_stateOrRegion", spelling.state, lambda v: v),
     "city": ("address_city", spelling.city, F.initcap),
-    "specialty": ("specialties", spelling.specialty, lambda v: v),
+    "british_spelling_specialties": ("specialties", spelling.american_spelling, lambda v: v),
+    "british_spelling_procedure": ("procedure", spelling.american_spelling, lambda v: v),
+    "british_spelling_equipment": ("equipment", spelling.american_spelling, lambda v: v),
+    "british_spelling_capability": ("capability", spelling.american_spelling, lambda v: v),
 }
 
 

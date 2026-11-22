@@ -33,18 +33,22 @@ operator_type = _lower_case_with_aliases(aliases.OPERATOR_TYPE)
 affiliation_type = _lower_case_with_aliases(aliases.AFFILIATION_TYPE)
 
 
-_SPECIALTY_REPLACEMENTS = [
+# (British, American) per fragment and case shape, in table order.
+_AMERICAN_SPELLING_REPLACEMENTS = [
     (shape(british), shape(american))
-    for british, american in aliases.SPECIALTY_SPELLING.items()
+    for british, american in aliases.BRITISH_SPELLING.items()
     for shape in (str.lower, str.capitalize, str.upper)
 ]
 
 
-def specialty(col: Column) -> Column:
-    """British spelling fragments to American, keeping each fragment's case shape."""
-    for british, american in _SPECIALTY_REPLACEMENTS:
-        col = F.regexp_replace(col, british, american)
-    return col
+def american_spelling(col: Column) -> Column:
+    """British spelling fragments to American, in table order, keeping each fragment's case shape.
+
+    One `aggregate` over the replacement pairs rather than a chain of nested
+    replaces: hundreds of nested expressions overflow Spark's code generator.
+    """
+    pairs = F.array(*[F.struct(F.lit(b).alias("b"), F.lit(a).alias("a")) for b, a in _AMERICAN_SPELLING_REPLACEMENTS])
+    return F.aggregate(pairs, col, lambda acc, pair: F.replace(acc, pair["b"], pair["a"]))
 
 
 def city(col: Column) -> Column:
