@@ -31,9 +31,13 @@ def backend():
     return DatabricksBackend()
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def cached_recommend(service: str, location: str, urgency: str) -> dict:
-    return recommend(service, location, urgency, backend=backend())
+def answer_for(query: tuple) -> dict:
+    """The answer for this query, computed once per search (so each search is one trace),
+    then kept in the session while the user expands sections."""
+    if st.session_state.get("answer_query") != query:
+        st.session_state.answer = recommend(*query, backend=backend())
+        st.session_state.answer_query = query
+    return st.session_state.answer
 
 
 def md(text: str) -> str:
@@ -43,6 +47,7 @@ def md(text: str) -> str:
 
 def run_search(service: str, location: str, urgency: str) -> None:
     st.session_state.query = (service, location, urgency)
+    st.session_state.pop("answer_query", None)  # a new search is a new trace
 
 
 # --- Search form -------------------------------------------------------------
@@ -67,7 +72,7 @@ if "query" not in st.session_state:
 
 service, location, urgency = st.session_state.query
 with st.spinner(f"Searching for {service} near {location}…"):
-    answer = cached_recommend(service, location, urgency)
+    answer = answer_for((service, location, urgency))
 
 # --- Error and ambiguous states -----------------------------------------------
 
@@ -124,6 +129,9 @@ def card(result: dict, position: int) -> None:
             st.dataframe(hits, hide_index=True, width="stretch")
             st.code(present.formula_text(answer), language=None)
             st.json({k: answer["settings"][k] for k in ("min_direct_facilities", "max_k", "min_similarity", "type_weights", "label_values")}, expanded=False)
+            if answer.get("trace_id"):
+                link = f" · [open trace]({answer['trace_url']})" if answer.get("trace_url") else ""
+                st.caption(f"Trace id: `{answer['trace_id']}`{link}")
 
 
 for i, result in enumerate(top, 1):

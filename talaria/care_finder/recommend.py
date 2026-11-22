@@ -5,7 +5,7 @@ here is plain Python, so the flow is tested with a fake backend.
 """
 
 from talaria.care_finder import labels as labels_mod
-from talaria.care_finder import reasons, scoring
+from talaria.care_finder import reasons, scoring, tracing
 from talaria.care_finder.location import LocationError, Place, choose_location, parse_location
 from talaria.care_finder.search import direct_facilities, expanding_search
 from talaria.care_finder.settings import DEFAULT, Settings
@@ -19,6 +19,7 @@ def recommend(service: str, location: str, urgency: str = "planned", *, backend=
 
     `status` is `ok` (results, possibly empty), `ambiguous` (`candidates` to choose
     from, each usable as a new `location`) or `error` (`error` is shown to the user).
+    Each call is one MLflow trace (`trace_id`, `trace_url`) when tracing works.
     """
     if backend is None:
         from talaria.care_finder.backend import DatabricksBackend
@@ -26,38 +27,103 @@ def recommend(service: str, location: str, urgency: str = "planned", *, backend=
         backend = DatabricksBackend()
     service = (service or "").strip()
     urgency = urgency if urgency in URGENCIES else "planned"
+    with tracing.span("recommend", {"service": service, "location": location, "urgency": urgency}) as root:
+        answer = _recommend(service, location, urgency, backend, settings)
+        tracing.tag_trace(
+            {
+                "service": service,
+                "location": location,
+                "urgency": urgency,
+                "status": answer["status"],
+                "fallback_used": answer.get("evidence_checked") is False,
+            }
+        )
+        root.set_outputs(
+            {
+                "status": answer["status"],
+                "top": [{"unique_id": r["unique_id"], "name": r["name"], "rank": r["rank"]} for r in answer.get("top", [])],
+                "search": answer.get("search"),
+                "error": answer.get("error"),
+                "candidates": answer.get("candidates"),
+            }
+        )
+    answer["trace_id"] = root.trace_id
+    answer["trace_url"] = tracing.trace_url(root.trace_id)
+    return answer
+
+
+def _recommend(service: str, location: str, urgency: str, backend, settings: Settings) -> dict:
     base = {"service": service, "location_query": location, "urgency": urgency, "settings": settings.as_dict()}
     if not service:
         return {**base, "status": "error", "error": "Enter a service, such as dialysis or MRI."}
 
-    try:
-        place = resolve_location(location, backend)
-    except LocationError as e:
-        return {**base, "status": "error", "error": str(e)}
-    if isinstance(place, list):
-        return {**base, "status": "ambiguous", "candidates": [p.label for p in place]}
+    with tracing.span("resolve_location", {"text": location}) as span:
+        try:
+            place = resolve_location(location, backend)
+        except LocationError as e:
+            span.set_outputs({"error": str(e)})
+            return {**base, "status": "error", "error": str(e)}
+        if isinstance(place, list):
+            span.set_outputs({"candidates": [p.label for p in place]})
+            return {**base, "status": "ambiguous", "candidates": [p.label for p in place]}
+        span.set_outputs({"label": place.label, "kind": place.kind, "lat": place.lat, "lon": place.lon})
 
     service_key = labels_mod.normalize_service(service)
     cache = backend.cached_labels(service_key)
     new_labels: dict[str, dict] = {}
 
     def search_band(cells):
-        return backend.search_band(service, cells, settings.results_per_round)
+        with tracing.span("vector_search", {"query": service, "cells": len(cells)}, "RETRIEVER") as span:
+            hits = backend.search_band(service, cells, settings.results_per_round)
+            span.set_outputs({"hits": len(hits), "top_hits": _brief(hits[:5])})
+            return hits
 
     def label_hits(hits):
-        return _label_hits(service, hits, cache, new_labels, backend, settings)
+        with tracing.span("llm_check", {"hits": len(hits)}, "LLM") as span:
+            labels, info = _label_hits(service, hits, cache, new_labels, backend, settings)
+            counts = {name: sum(1 for v in labels.values() if v["label"] == name) for name in labels_mod.LABELS}
+            span.set_outputs({**info, "labels": counts})
+            return labels, info
 
     found = expanding_search(place.lat, place.lon, search_band, label_hits, settings)
+    with tracing.span("loop_summary") as span:
+        span.set_outputs(
+            {
+                "rounds": len(found["rounds"]),
+                "searched_k": found["searched_k"],
+                "searched_radius_km": found["searched_radius_km"],
+                "stop_reason": found["stop_reason"],
+                "fallback_used": found["fallback_used"],
+            }
+        )
     if new_labels:
         backend.save_labels(service_key, new_labels)
 
-    results = score_facilities(found["hits"], backend, place, urgency, settings)
+    with tracing.span("scoring", {"facilities": len({h["unique_id"] for h in found["hits"]})}) as span:
+        results = score_facilities(found["hits"], backend, place, urgency, settings)
+        span.set_outputs(
+            [
+                {
+                    "unique_id": r["unique_id"],
+                    "service_evidence": r["service_evidence"],
+                    "confidence_score": r["confidence_score"],
+                    "distance_km": r["distance_km"],
+                    "distance_factor": r["distance_factor"],
+                    "rank": r["rank"],
+                    "hits": [{k: e[k] for k in ("item_type", "item_text", "similarity", "label", "value", "counted")} for e in r["evidence"][:5]],
+                }
+                for r in results[:10]
+            ]
+        )
+    with tracing.span("ranking") as span:
+        top, others = results[: settings.top_n], results[settings.top_n : settings.top_n + settings.others_n]
+        span.set_outputs({"top": [r["unique_id"] for r in top], "others": [r["unique_id"] for r in others]})
     return {
         **base,
         "status": "ok",
         "location": {"label": place.label, "kind": place.kind, "lat": place.lat, "lon": place.lon},
-        "top": results[: settings.top_n],
-        "others": results[settings.top_n : settings.top_n + settings.others_n],
+        "top": top,
+        "others": others,
         "evidence_checked": not found["fallback_used"],
         "search": {
             "searched_k": found["searched_k"],
@@ -68,6 +134,10 @@ def recommend(service: str, location: str, urgency: str = "planned", *, backend=
         },
         "round_details": found["rounds"],
     }
+
+
+def _brief(hits: list[dict]) -> list[dict]:
+    return [{"item_id": h["item_id"], "item_text": h["item_text"][:120], "similarity": round(h["similarity"], 3)} for h in hits]
 
 
 def resolve_location(text: str, backend) -> Place | list[Place]:

@@ -14,6 +14,7 @@ from typing import Callable
 
 import h3
 
+from talaria.care_finder import tracing
 from talaria.care_finder.settings import DEFAULT, Settings
 
 ENOUGH, MAX_RADIUS = "enough matches", "max radius reached"
@@ -50,13 +51,22 @@ def expanding_search(
     for k in k_steps(settings):
         band = sorted(set(h3.grid_disk(start, k)) - searched)
         searched.update(band)
-        found = [h for h in search_band(band) if h["item_id"] not in hits]
-        kept = [h for h in found if h["similarity"] >= settings.min_similarity]
-        labels, info = label_hits(kept) if kept else ({}, {"cache_hits": 0, "llm_calls": 0, "fallback_used": False})
-        for hit in kept:
-            if hit["item_id"] in labels:
-                hits[hit["item_id"]] = {**hit, **labels[hit["item_id"]], "round": len(rounds) + 1}
-        direct = direct_facilities(hits.values())
+        with tracing.span(f"round {len(rounds) + 1}", {"k": k, "new_cells": len(band)}) as span:
+            found = [h for h in search_band(band) if h["item_id"] not in hits]
+            kept = [h for h in found if h["similarity"] >= settings.min_similarity]
+            labels, info = label_hits(kept) if kept else ({}, {"cache_hits": 0, "llm_calls": 0, "fallback_used": False})
+            for hit in kept:
+                if hit["item_id"] in labels:
+                    hits[hit["item_id"]] = {**hit, **labels[hit["item_id"]], "round": len(rounds) + 1}
+            direct = direct_facilities(hits.values())
+            span.set_outputs(
+                {
+                    "hits_found": len(found),
+                    "hits_kept": len(kept),
+                    "new_facilities": len({h["unique_id"] for h in kept}),
+                    "direct_facilities_so_far": len(direct),
+                }
+            )
         rounds.append(
             {
                 "k": k,
