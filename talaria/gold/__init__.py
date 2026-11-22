@@ -1,6 +1,6 @@
 """Gold: the first layer that judges Facilities (spec #37).
 
-One public entry point, `build_gold`: Silver facilities DataFrame in,
+One public entry point, `build_gold`: Silver Stage 3 DataFrame in,
 `(gold_facilities, gold_facility_items)` out. No reads, writes or Databricks-only calls.
 """
 

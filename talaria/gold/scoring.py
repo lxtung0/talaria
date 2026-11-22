@@ -5,7 +5,7 @@ cap so positive evidence never covers a real problem. Each step is one line of
 `confidence_reasons`, so the log alone replays to the score.
 
 To change a weight, edit `TIERS`. To move a flag to another tier or add one
-(the specialty flags from Julia's Reference table go here), edit `RULES`.
+(Silver Stage 3's consistency flags go here), edit `RULES`.
 """
 
 from collections.abc import Callable
@@ -31,6 +31,7 @@ TIERS = [
     Tier("major", -10, 75),
     Tier("minor", -3, 90),
     Tier("positive", +10, None),
+    Tier("info", 0, None),  # Logged for the reader, never scored: missing information (ADR 0002).
 ]
 TIER_BY_NAME = {tier.name: tier for tier in TIERS}
 
@@ -50,11 +51,11 @@ class Rule:
         return F.coalesce(column, F.lit(False))
 
     def line(self) -> str:
-        return f"{TIER_BY_NAME[self.tier].points:+d} [{self.tier}] {self.reason}"
+        points = TIER_BY_NAME[self.tier].points
+        return f"{points:+d} [{self.tier}] {self.reason}" if points else f"0 [{self.tier}] {self.reason}"
 
 
 # Grouped by tier, in `TIERS` order, so the log reads worst first.
-# `flag_specialty_unsupported_by_capability` is deliberately not scored (spec #37).
 RULES = [
     # critical: the location or address is wrong, or nothing backs the record.
     Rule("flag_coords_far_from_written_pin", "critical", "The map location is far from the facility's PIN code area"),
@@ -63,15 +64,20 @@ RULES = [
     Rule("flag_pin_mismatch", "critical", "The PIN code belongs to a different state than the address"),
     Rule("flag_pin_unverified", "critical", "The PIN code is not in the India Post directory"),
     Rule("no_sources", "critical", "No source pages are listed", lambda: F.col("source_urls").isNull()),
+    Rule("flag_merge_different", "critical", "The listed procedures belong to a different field than the specialties"),
+    Rule("flag_name_facilityType", "critical", "The name and the facility type disagree (hospital vs clinic)"),
     # major: the record contradicts itself, but the facility likely exists.
     Rule("flag_desc_mentions_other_state", "major", "The description mentions a different state"),
     Rule("flag_coords_shared", "major", "Another facility has exactly the same map location"),
     Rule("flag_affiliation_operator_conflict", "major", "The affiliation and the operator type disagree (government vs private)"),
-    Rule("flag_bed_doctor_ratio_outlier", "major", "The number of beds per doctor is unusual for this type of facility"),
+    Rule("flag_facility_capacity_outlier", "major", "The bed or doctor count looks wrong for this facility", lambda: _capacity(only_one_doctor=False)),
+    Rule("flag_major_orphan", "major", "A high-risk procedure, equipment or unit is listed without a matching specialty"),
+    Rule("flag_specialty_unsupported", "major", "Most listed specialties have no supporting procedure, equipment or capability"),
     Rule("flag_official_phone_not_in_list", "major", "The official phone is not in the facility's own phone list"),
     Rule("flag_official_website_not_in_list", "major", "The official website is not in the facility's own website list"),
     Rule("flag_only_directory_sources", "major", "All sources are directory or social media listings"),
     # minor: format problems, values already fixed, or an incomplete record.
+    Rule("hospital_with_one_doctor", "minor", "The doctor count of 1 for a hospital looks like a placeholder", lambda: _capacity(only_one_doctor=True)),
     Rule("flag_state_corrected", "minor", "The state name was corrected using the PIN code and city"),
     Rule("flag_zero_beds", "minor", "The bed count is listed as zero"),
     Rule("flag_phone_list_without_official", "minor", "Phone numbers are listed but none is marked as official"),
@@ -82,7 +88,20 @@ RULES = [
     # positive: evidence that raises trust.
     Rule("flag_has_government_source", "positive", "A government website is among the sources"),
     Rule("flag_own_site_in_sources", "positive", "The facility's own website is among the sources"),
+    Rule("flag_large_hospital", "positive", "A large hospital whose specialties, beds and doctors are consistent"),
+    # info: missing information, logged but never scored (ADR 0002).
+    Rule("flag_unverified", "info", "Procedures, equipment or capabilities are not listed"),
+    Rule("flag_partial", "info", "Some procedures are listed without matching equipment, or the reverse"),
 ]
+
+# Stage 3's capacity rule R0-5 (a hospital with exactly 1 doctor) alone is a placeholder
+# value, so minor; any other R0 rule is major. `outlier_reason` is "R0-5" only when R0-5 alone fired.
+ONE_DOCTOR_ONLY = "R0-5"
+
+
+def _capacity(only_one_doctor: bool) -> Column:
+    only = F.coalesce(F.col("outlier_reason") == ONE_DOCTOR_ONLY, F.lit(False))
+    return F.col("flag_facility_capacity_outlier") & (only if only_one_doctor else ~only)
 
 
 def rules_in(tier: str) -> list[Rule]:
@@ -97,7 +116,7 @@ def _any_fired(tier: str) -> Column:
 
 
 def score_columns() -> dict[str, Column]:
-    """`confidence_score` and `confidence_reasons`, as columns over Silver facilities."""
+    """`confidence_score` and `confidence_reasons`, as columns over Silver Stage 3."""
     raw = F.lit(START)
     for rule in RULES:
         raw = raw + F.when(rule.fired(), F.lit(TIER_BY_NAME[rule.tier].points)).otherwise(F.lit(0))

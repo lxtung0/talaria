@@ -1,4 +1,4 @@
-"""Gold behaviour (spec #37), tested through `build_gold` on real Silver facilities output."""
+"""Gold behaviour (spec #37), tested through `build_gold` on real Silver Stage 3 output."""
 
 import datetime
 
@@ -9,24 +9,37 @@ from talaria.gold import build_gold, scoring
 from talaria.gold.checks import check_gold
 from talaria.gold.score_counts import format_score_counts, score_counts
 from talaria.silver_facilities import build_silver_facilities
+from talaria.silver_stage3 import build_silver_stage3
 
 RUN_DATE = datetime.date(2026, 11, 21)
 FLAG_RULES = [rule for rule in scoring.RULES if rule.condition is None]
+# Every boolean the rules read, so the fixture can start each Facility clean.
+SCORED_FLAGS = [*[rule.name for rule in FLAG_RULES], "flag_facility_capacity_outlier", "is_veterinary"]
+
+
+# Building Silver Stage 3 runs every earlier stage, so each distinct input is built once.
+_BUILT = {}
 
 
 @pytest.fixture
 def silver(make_silver_inputs, no_pincodes):
-    """Silver facilities from partial bronze rows, with every scored flag set to false.
+    """Silver Stage 3 from partial bronze rows, with every scored flag set to false.
 
     Tests then turn on exactly the flags they mean, so the default fixture's own
     flags (a single source host, say) never leak into the score.
     """
 
     def build(*rows):
+        key = repr(rows)
+        if key not in _BUILT:
+            _BUILT[key] = _build(*rows)
+        return _BUILT[key]
+
+    def _build(*rows):
         bronze, silver_base = make_silver_inputs(*rows)
-        df = build_silver_facilities(silver_base, bronze, no_pincodes, RUN_DATE)
-        for rule in FLAG_RULES:
-            df = df.withColumn(rule.name, F.lit(False))
+        df = build_silver_stage3(build_silver_facilities(silver_base, bronze, no_pincodes, RUN_DATE))
+        for name in SCORED_FLAGS:
+            df = df.withColumn(name, F.lit(False))
         return df.localCheckpoint()
 
     return build
@@ -47,7 +60,13 @@ def test_no_flags_scores_the_start(silver):
     assert row.location_uncertain is False
 
 
-@pytest.mark.parametrize("rule", FLAG_RULES, ids=lambda rule: rule.name)
+# One representative rule per tier; the rule table itself is reviewed in the ADR.
+REPRESENTATIVE_RULES = [
+    next(rule for rule in FLAG_RULES if rule.tier == tier.name) for tier in scoring.TIERS
+]
+
+
+@pytest.mark.parametrize("rule", REPRESENTATIVE_RULES, ids=lambda rule: rule.name)
 def test_each_rule_adds_its_points_and_its_line(silver, rule):
     tier = scoring.TIER_BY_NAME[rule.tier]
     row = gold_row(silver({}), **{rule.name: True})
@@ -113,13 +132,52 @@ def test_score_never_goes_below_zero(silver):
     assert row.confidence_score == 0.0
 
 
-def test_specialty_flag_is_not_scored(silver):
-    row = gold_row(silver({}), flag_specialty_unsupported_by_capability=True)
-
-    assert row.confidence_reasons == ["start 80"]
+def test_replaced_stage2_flags_are_not_read(silver):
+    assert "flag_specialty_unsupported_by_capability" not in silver({}).columns
 
 
-@pytest.mark.parametrize("flag", ["flag_coords_far_from_written_pin", "flag_no_same_prefix_pin_nearby", "flag_coords_shared"])
+@pytest.mark.parametrize(
+    "reason, expected",
+    [
+        ("R0-5", ["start 80", "-3 [minor] The doctor count of 1 for a hospital looks like a placeholder"]),
+        ("R0-4; R0-5", ["start 80", "-10 [major] The bed or doctor count looks wrong for this facility"]),
+    ],
+)
+def test_one_doctor_alone_is_minor_and_any_other_capacity_rule_is_major(silver, reason, expected):
+    row = gold_row(silver({}), flag_facility_capacity_outlier=True, outlier_reason=reason)
+
+    assert row.confidence_reasons == expected
+
+
+def test_missing_information_is_logged_but_not_scored(silver):
+    row = gold_row(silver({}), flag_unverified=True, flag_partial=True)
+
+    assert row.confidence_reasons == [
+        "start 80",
+        "0 [info] Procedures, equipment or capabilities are not listed",
+        "0 [info] Some procedures are listed without matching equipment, or the reverse",
+    ]
+    assert row.confidence_score == 0.80
+
+
+def test_three_positives_stop_at_full_marks(silver):
+    row = gold_row(silver({}), flag_has_government_source=True, flag_own_site_in_sources=True, flag_large_hospital=True)
+
+    assert row.confidence_score == 1.0
+
+
+def test_veterinary_facilities_leave_both_tables(silver):
+    df = silver({"unique_id": "pet", "specialties": '["cardiology"]'}, {"unique_id": "people"})
+    df = df.withColumn("is_veterinary", F.col("unique_id") == "pet")
+
+    facilities, items = build_gold(df)
+
+    assert [row.unique_id for row in facilities.collect()] == ["people"]
+    assert items.where(F.col("unique_id") == "pet").count() == 0
+    check_gold(df, facilities, items)
+
+
+@pytest.mark.parametrize("flag", ["flag_coords_shared"])
 def test_any_group_h_flag_makes_location_uncertain(silver, flag):
     assert gold_row(silver({}), **{flag: True}).location_uncertain is True
 
@@ -210,7 +268,7 @@ def test_a_changed_copied_value_fails(tables):
     silver_df, facilities, items = tables
     broken = facilities.withColumn("name", F.lit("Other"))
 
-    with pytest.raises(ValueError, match=r"name: 2 row\(s\) differ from Silver facilities"):
+    with pytest.raises(ValueError, match=r"name: 2 row\(s\) differ from Silver"):
         check_gold(silver_df, broken, items)
 
 

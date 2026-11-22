@@ -20,13 +20,13 @@ def description_sentences(description: Column) -> Column:
     return F.filter(pieces, lambda piece: piece != "")
 
 
-def build_items(silver_facilities: DataFrame) -> DataFrame:
+def build_items(silver: DataFrame) -> DataFrame:
     sources = [(F.col(name), item_type) for name, item_type in columns.LIST_ITEM_TYPES.items()]
     sources.append((description_sentences(F.col("description")), columns.DESCRIPTION_ITEM_TYPE))
 
     parts = []
     for items, item_type in sources:
-        part = silver_facilities.select("unique_id", F.posexplode(items).alias("position", "item_text")).select(
+        part = silver.select("unique_id", F.posexplode(items).alias("position", "item_text")).select(
             F.concat_ws(":", "unique_id", F.lit(item_type), F.col("position").cast("string")).alias("item_id"),
             "unique_id",
             F.lit(item_type).alias("item_type"),

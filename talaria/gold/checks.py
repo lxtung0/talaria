@@ -10,15 +10,19 @@ from talaria.gold import columns, scoring
 from talaria.silver_base.checks import unique_id_counts, unique_id_failures
 
 
-def check_gold(silver_facilities: DataFrame, facilities: DataFrame, items: DataFrame) -> None:
-    """Raise ValueError naming every failed check; return quietly when all pass."""
+def check_gold(silver: DataFrame, facilities: DataFrame, items: DataFrame) -> None:
+    """Raise ValueError naming every failed check; return quietly when all pass.
+
+    Compares against the in-scope Silver rows: veterinary facilities are left out of Gold.
+    """
+    silver = columns.in_scope(silver)
     failures = _schema_failures("gold_facilities", facilities, columns.GOLD_FACILITIES)
     failures += _schema_failures("gold_facility_items", items, columns.GOLD_FACILITY_ITEMS)
     if failures:
         _fail(failures)  # The value checks need every column with its type.
-    failures = _facility_failures(silver_facilities, facilities)
-    failures += _copied_value_failures(silver_facilities, facilities)
-    failures += _item_failures(silver_facilities, facilities, items)
+    failures = _facility_failures(silver, facilities)
+    failures += _copied_value_failures(silver, facilities)
+    failures += _item_failures(silver, facilities, items)
     if failures:
         _fail(failures)
 
@@ -46,7 +50,7 @@ def _location_uncertain() -> Column:
     return any_flag
 
 
-def _facility_failures(silver_facilities: DataFrame, facilities: DataFrame) -> list[str]:
+def _facility_failures(silver: DataFrame, facilities: DataFrame) -> list[str]:
     score, reasons = F.col("confidence_score"), F.col("confidence_reasons")
     counts = facilities.agg(
         *unique_id_counts(),
@@ -56,9 +60,9 @@ def _facility_failures(silver_facilities: DataFrame, facilities: DataFrame) -> l
         F.count(F.when(F.col("location_uncertain").isNull(), 1)).alias("null_location"),
     ).first()
     failures = unique_id_failures(counts)
-    silver_rows = silver_facilities.count()
+    silver_rows = silver.count()
     if counts.rows != silver_rows:
-        failures.append(f"gold_facilities has {counts.rows} rows, Silver facilities has {silver_rows}")
+        failures.append(f"gold_facilities has {counts.rows} rows, Silver Stage 3 has {silver_rows}")
     if counts.bad_score:
         failures.append(f"confidence_score: {counts.bad_score} row(s) NULL or outside 0-1")
     if counts.null_reasons:
@@ -69,7 +73,7 @@ def _facility_failures(silver_facilities: DataFrame, facilities: DataFrame) -> l
         failures.append(f"location_uncertain: {counts.null_location} row(s) NULL")
 
     wrong_location = (
-        silver_facilities.select("unique_id", _location_uncertain().alias("expected"))
+        silver.select("unique_id", _location_uncertain().alias("expected"))
         .join(facilities.select("unique_id", "location_uncertain"), "unique_id")
         .where(F.col("expected") != F.col("location_uncertain"))
         .count()
@@ -79,14 +83,14 @@ def _facility_failures(silver_facilities: DataFrame, facilities: DataFrame) -> l
     return failures
 
 
-def _copied_value_failures(silver_facilities: DataFrame, facilities: DataFrame) -> list[str]:
+def _copied_value_failures(silver: DataFrame, facilities: DataFrame) -> list[str]:
     """Each copied column's hash in Silver and in Gold, compared per Facility."""
     names = [name for name in [*columns.COPIED_COLUMNS, "needs_investigation"] if name != "unique_id"]
 
     def hashed(df: DataFrame, side: str) -> DataFrame:
         return df.select(F.col("unique_id").alias(f"{side}:id"), *[_value_hash(n).alias(f"{side}:{n}") for n in names])
 
-    before, after = hashed(silver_facilities, "silver"), hashed(facilities, "gold")
+    before, after = hashed(silver, "silver"), hashed(facilities, "gold")
     silver_id, gold_id = F.col("silver:id"), F.col("gold:id")
     matched = silver_id.isNotNull() & gold_id.isNotNull()
     counts = (
@@ -98,9 +102,9 @@ def _copied_value_failures(silver_facilities: DataFrame, facilities: DataFrame) 
         )
         .first()
     )
-    failures = [f"{n}: {counts[n]} row(s) differ from Silver facilities" for n in names if counts[n]]
+    failures = [f"{n}: {counts[n]} row(s) differ from Silver" for n in names if counts[n]]
     if counts["lost"] or counts["added"]:
-        failures.append(f"unique_id differs from Silver facilities: {counts['lost']} lost, {counts['added']} added")
+        failures.append(f"unique_id differs from Silver: {counts['lost']} lost, {counts['added']} added")
     return failures
 
 
@@ -113,7 +117,7 @@ def _list_length(name: str) -> Column:
     return F.when(F.col(name).isNull(), 0).otherwise(F.size(name))
 
 
-def _item_failures(silver_facilities: DataFrame, facilities: DataFrame, items: DataFrame) -> list[str]:
+def _item_failures(silver: DataFrame, facilities: DataFrame, items: DataFrame) -> list[str]:
     counts = items.agg(
         F.count(F.lit(1)).alias("rows"),
         F.count("item_id").alias("non_null_ids"),
@@ -138,7 +142,7 @@ def _item_failures(silver_facilities: DataFrame, facilities: DataFrame, items: D
     per_facility = items.groupBy("unique_id").agg(
         *[F.count(F.when(F.col("item_type") == t, 1)).alias(t) for t in columns.LIST_ITEM_TYPES.values()]
     )
-    expected = silver_facilities.select(
+    expected = silver.select(
         "unique_id", *[_list_length(name).alias(f"expected:{t}") for name, t in columns.LIST_ITEM_TYPES.items()]
     )
     compared = expected.join(per_facility, "unique_id", "left").agg(

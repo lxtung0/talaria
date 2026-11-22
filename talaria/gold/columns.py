@@ -4,9 +4,12 @@ The pipeline selects these columns in this order and the runtime checks compare
 the output types against them, so a schema change is one edit here.
 """
 
+from pyspark.sql import DataFrame
+from pyspark.sql import functions as F
+
 from talaria.silver_facilities import location
 
-# Copied verbatim from Silver facilities, in output order.
+# Copied verbatim from Silver Stage 3, in output order.
 COPIED_COLUMNS = {
     "unique_id": "string",
     "name": "string",
@@ -44,6 +47,11 @@ LIST_ITEM_TYPES = {
 }
 DESCRIPTION_ITEM_TYPE = "description_sentence"
 ITEM_TYPES = [*LIST_ITEM_TYPES.values(), DESCRIPTION_ITEM_TYPE]
+
+def in_scope(silver: DataFrame) -> DataFrame:
+    """Gold covers human healthcare only: Stage 3's veterinary facilities (R1) are left out."""
+    return silver.where(~F.coalesce(F.col("is_veterinary"), F.lit(False)))
+
 
 # `location_uncertain` is true when any group H flag is true.
 LOCATION_FLAGS = location.FLAGS

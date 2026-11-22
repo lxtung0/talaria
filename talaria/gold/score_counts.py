@@ -3,12 +3,13 @@
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from talaria.gold import scoring
+from talaria.gold import columns, scoring
 
 
-def score_counts(silver_facilities: DataFrame, facilities: DataFrame) -> dict:
-    """`{"rules": {rule: n}, "worst_tier": {tier: n}, "scores": {score: n}}`, read from Silver flags and Gold scores."""
-    fired = silver_facilities.agg(
+def score_counts(silver: DataFrame, facilities: DataFrame) -> dict:
+    """`{"rules": {rule: n}, "worst_tier": {tier: n}, "scores": {score: n}}`, read from Silver Stage 3 flags and Gold scores."""
+    silver = columns.in_scope(silver)
+    fired = silver.agg(
         *[F.count(F.when(rule.fired(), 1)).alias(rule.name) for rule in scoring.RULES]
     ).first()
 
@@ -18,7 +19,7 @@ def score_counts(silver_facilities: DataFrame, facilities: DataFrame) -> dict:
         for rule in scoring.rules_in(tier.name):
             any_fired = any_fired | rule.fired()
         worst = F.when(any_fired, F.lit(tier.name)).otherwise(worst)
-    tiers = {row.tier: row["count"] for row in silver_facilities.groupBy(worst.alias("tier")).count().collect()}
+    tiers = {row.tier: row["count"] for row in silver.groupBy(worst.alias("tier")).count().collect()}
 
     scores = {row.confidence_score: row["count"] for row in facilities.groupBy("confidence_score").count().collect()}
     return {
