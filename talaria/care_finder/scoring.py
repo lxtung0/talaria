@@ -50,6 +50,14 @@ def distance_decay(distance_km: float, urgency: str, settings: Settings = DEFAUL
     return math.exp(-distance_km / d0)
 
 
+def open_24_7_factor(open_24_7: bool, urgency: str, settings: Settings = DEFAULT) -> float:
+    """1 for planned care; for an emergency, 1 if the Facility says it is open 24/7, else 1 − weight."""
+    if urgency != "emergency":
+        return 1.0
+    w = settings.emergency_24_7_weight
+    return 1.0 - w + w * open_24_7
+
+
 def insurance_need(insurance_pct: float | None, settings: Settings = DEFAULT) -> float:
     """0 at or above `low_insurance_pct` or with no NFHS-5 figure, rising to 1 where no household is insured."""
     if insurance_pct is None:
@@ -64,9 +72,17 @@ def affordability_factor(tier: str | None, need: float, settings: Settings = DEF
 
 
 def rank_score(
-    evidence: float, confidence: float, distance_km: float, urgency: str, settings: Settings = DEFAULT, affordability: float = 1.0
+    evidence: float, confidence: float, distance_km: float, urgency: str, settings: Settings = DEFAULT,
+    affordability: float = 1.0,
+    open_24_7: bool = False,
 ) -> float:
-    return evidence * (0.5 + 0.5 * confidence) * distance_decay(distance_km, urgency, settings) * affordability
+    return (
+        evidence
+        * (0.5 + 0.5 * confidence)
+        * distance_decay(distance_km, urgency, settings)
+        * affordability
+        * open_24_7_factor(open_24_7, urgency, settings)
+    )
 
 
 def evidence_band(evidence: float, settings: Settings = DEFAULT) -> str:

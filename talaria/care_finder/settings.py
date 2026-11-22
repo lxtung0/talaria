@@ -39,6 +39,9 @@ class Settings:
     )
     hits_per_type: int = 2  # only the best this many hits of each type count
     distance_decay_km: dict = field(default_factory=lambda: {"emergency": 25.0, "planned": 100.0})
+    # Emergency only: a Facility with no 24/7 claim keeps 1 − this of its rank. Kept
+    # smaller than the confidence factor's 0.5, so evidence and distance weigh most.
+    emergency_24_7_weight: float = 0.15
     # Affordability: free or low-cost Facilities rank a little higher where fewer households
     # are insured (NFHS-5, the entered location's H3 cell), and only below `low_insurance_pct`.
     # rank × (1 + boost × tier × need), need = (low_insurance_pct − insurance %) / low_insurance_pct.

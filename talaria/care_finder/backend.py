@@ -22,6 +22,8 @@ _PINCODES = f"""(SELECT pincode, district, statename,
     try_cast(latitude AS DOUBLE) AS lat, try_cast(longitude AS DOUBLE) AS lon FROM {APP_PINCODES})"""
 CITY_MIN_SHARE = 0.1  # a city's state needs at least this share of its Facilities
 LABELS_SCHEMA = "item_id STRING, service_query STRING, label STRING, reason STRING, labelled_at TIMESTAMP"
+# A claim saying the Facility (or any part of it) is open around the clock, for the emergency rank.
+OPEN_24_7 = r"(?i)(24\s*[/x×]\s*7|24\s*hours?|24\s*hrs?|round[- ]the[- ]clock)"
 
 
 class DatabricksBackend:
@@ -181,9 +183,17 @@ class DatabricksBackend:
         return {k: row[k] for k in ("nfhs_state", "nfhs_district", "insurance_pct")}
 
     def facilities(self, unique_ids: list[str]) -> list[dict]:
+        """Each Facility's row plus `open_24_7_quote`: one of its claims that says 24/7, or null."""
         return self.sql(
-            f"SELECT * FROM {APP['facilities']} WHERE array_contains(from_json(:ids, 'array<string>'), unique_id)",
+            f"""SELECT f.*, o.open_24_7_quote
+            FROM {APP['facilities']} f
+            LEFT JOIN (SELECT unique_id, min_by(item_text, item_id) AS open_24_7_quote
+                       FROM {APP['facility_items']}
+                       WHERE array_contains(from_json(:ids, 'array<string>'), unique_id) AND item_text rlike :open_24_7
+                       GROUP BY unique_id) o ON o.unique_id = f.unique_id
+            WHERE array_contains(from_json(:ids, 'array<string>'), f.unique_id)""",
             ids=json.dumps(unique_ids),
+            open_24_7=OPEN_24_7,
         )
 
 

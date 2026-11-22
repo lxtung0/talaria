@@ -190,6 +190,22 @@ def test_top_three_and_the_next_three_by_rank():
     assert result["evidence_checked"] is True
 
 
+@pytest.mark.parametrize("urgency, open_first", [("emergency", True), ("planned", False)])
+def test_a_24_7_claim_lifts_the_rank_in_an_emergency_only(urgency, open_first):
+    # About 1 km and 3 km away: close enough that 24/7 outweighs the extra distance in an emergency.
+    lat, lon = PATNA
+    facilities = [facility_at(lat + 0.01, lon, "near"), facility_at(lat + 0.03, lon, "open", open_24_7_quote="Open 24 hours daily")]
+    texts = {uid: ("equipment", "Dialysis unit", 0.95) for uid in ("near", "open")}
+
+    result = recommend("dialysis", "Patna", urgency, backend=FakeBackend(facilities, texts))
+
+    assert (result["top"][0]["unique_id"] == "open") is open_first
+    open_result = next(r for r in result["top"] if r["unique_id"] == "open")
+    assert open_result["open_24_7_factor"] == 1.0
+    near_result = next(r for r in result["top"] if r["unique_id"] == "near")
+    assert near_result["open_24_7_factor"] == pytest.approx(0.85 if urgency == "emergency" else 1.0)
+
+
 def test_a_second_identical_query_uses_the_label_cache():
     (lat, lon), = ring_points(1, 1)
     backend = FakeBackend([facility_at(lat, lon, "f")], {"f": ("equipment", "Dialysis unit", 0.95)})
