@@ -1,0 +1,240 @@
+"""Gold behaviour (spec #37), tested through `build_gold` on real Silver facilities output."""
+
+import datetime
+
+import pytest
+from pyspark.sql import functions as F
+
+from talaria.gold import build_gold, scoring
+from talaria.gold.checks import check_gold
+from talaria.gold.score_counts import format_score_counts, score_counts
+from talaria.silver_facilities import build_silver_facilities
+
+RUN_DATE = datetime.date(2026, 11, 21)
+FLAG_RULES = [rule for rule in scoring.RULES if rule.condition is None]
+
+
+@pytest.fixture
+def silver(make_silver_inputs, no_pincodes):
+    """Silver facilities from partial bronze rows, with every scored flag set to false.
+
+    Tests then turn on exactly the flags they mean, so the default fixture's own
+    flags (a single source host, say) never leak into the score.
+    """
+
+    def build(*rows):
+        bronze, silver_base = make_silver_inputs(*rows)
+        df = build_silver_facilities(silver_base, bronze, no_pincodes, RUN_DATE)
+        for rule in FLAG_RULES:
+            df = df.withColumn(rule.name, F.lit(False))
+        return df.localCheckpoint()
+
+    return build
+
+
+def gold_row(silver_df, **flags):
+    for name, value in flags.items():
+        silver_df = silver_df.withColumn(name, F.lit(value))
+    facilities, _ = build_gold(silver_df)
+    return facilities.first()
+
+
+def test_no_flags_scores_the_start(silver):
+    row = gold_row(silver({"name": "City Hospital"}))
+
+    assert row.confidence_score == 0.80
+    assert row.confidence_reasons == ["start 80"]
+    assert row.location_uncertain is False
+
+
+@pytest.mark.parametrize("rule", FLAG_RULES, ids=lambda rule: rule.name)
+def test_each_rule_adds_its_points_and_its_line(silver, rule):
+    tier = scoring.TIER_BY_NAME[rule.tier]
+    row = gold_row(silver({}), **{rule.name: True})
+
+    points = 80 + tier.points
+    expected = ["start 80", rule.line()]
+    if tier.cap is not None and points > tier.cap:
+        expected.append(f"cap {tier.cap} [{tier.name}]")
+        points = tier.cap
+    assert row.confidence_reasons == expected
+    assert row.confidence_score == points / 100
+
+
+def test_no_sources_is_critical(silver):
+    df = silver({}).withColumn("source_urls", F.lit(None).cast("array<string>"))
+    row = gold_row(df)
+
+    assert row.confidence_reasons == ["start 80", "-20 [critical] No source pages are listed", "cap 55 [critical]"]
+    assert row.confidence_score == 0.55
+
+
+def test_positive_evidence_cannot_lift_past_the_worst_tiers_cap(silver):
+    row = gold_row(
+        silver({}),
+        flag_only_directory_sources=True,
+        flag_has_government_source=True,
+        flag_own_site_in_sources=True,
+    )
+
+    assert row.confidence_reasons == [
+        "start 80",
+        "-10 [major] All sources are directory or social media listings",
+        "+10 [positive] A government website is among the sources",
+        "+10 [positive] The facility's own website is among the sources",
+        "cap 75 [major]",
+    ]
+    assert row.confidence_score == 0.75
+
+
+def test_both_positives_reach_full_marks(silver):
+    row = gold_row(silver({}), flag_has_government_source=True, flag_own_site_in_sources=True)
+
+    assert row.confidence_score == 1.0
+
+
+def test_log_runs_worst_tier_first_and_a_lower_score_needs_no_cap_line(silver):
+    row = gold_row(silver({}), needs_investigation=True, flag_pin_unverified=True, flag_address_conflict=True)
+
+    assert row.confidence_reasons == [
+        "start 80",
+        "-20 [critical] The address names a state that its PIN code and city disagree with",
+        "-20 [critical] The PIN code is not in the India Post directory",
+        "-3 [minor] Some lists were cut off at 50 items, so the record may be incomplete",
+    ]
+    assert row.confidence_score == 0.37
+
+
+def test_score_never_goes_below_zero(silver):
+    critical = {rule.name: True for rule in scoring.rules_in("critical") if rule.condition is None}
+    major = {rule.name: True for rule in scoring.rules_in("major")}
+    row = gold_row(silver({}), **critical, **major)
+
+    assert row.confidence_score == 0.0
+
+
+def test_specialty_flag_is_not_scored(silver):
+    row = gold_row(silver({}), flag_specialty_unsupported_by_capability=True)
+
+    assert row.confidence_reasons == ["start 80"]
+
+
+@pytest.mark.parametrize("flag", ["flag_coords_far_from_written_pin", "flag_no_same_prefix_pin_nearby", "flag_coords_shared"])
+def test_any_group_h_flag_makes_location_uncertain(silver, flag):
+    assert gold_row(silver({}), **{flag: True}).location_uncertain is True
+
+
+def test_location_uncertain_ignores_silver_base_location_flags(silver):
+    assert gold_row(silver({}), flag_pin_unverified=True).location_uncertain is False
+
+
+def test_copies_silver_values_verbatim(silver):
+    df = silver({"name": "City Hospital", "address_city": "Pune", "officialPhone": "98765 43210", "latitude": 18.5})
+    facilities, _ = build_gold(df)
+    gold, base = facilities.first(), df.first()
+
+    for name in ["unique_id", "name", "address_city", "official_phone", "latitude", "source_urls", "needs_investigation"]:
+        assert gold[name] == base[name]
+
+
+def items_of(df):
+    _, items = build_gold(df)
+    return sorted((row.item_id, row.item_type, row.item_text) for row in items.collect())
+
+
+def test_lists_become_one_item_per_entry_in_list_order(silver):
+    df = silver(
+        {
+            "unique_id": "a",
+            "specialties": '["cardiology","dentistry"]',
+            "procedure": '["Angioplasty"]',
+            "equipment": '["MRI scanner"]',
+            "capability": '["24/7 emergency care"]',
+        }
+    )
+    first_specialty = df.first()["specialties"][0]  # Silver's own spelling of the first item
+
+    items = items_of(df)
+
+    assert ("a:specialty:0", "specialty", first_specialty) in items
+    assert [i[1] for i in items].count("specialty") == 2
+    assert ("a:procedure:0", "procedure", "Angioplasty") in items
+    assert ("a:equipment:0", "equipment", "MRI scanner") in items
+    assert ("a:capability:0", "capability", "24/7 emergency care") in items
+
+
+def test_description_splits_into_sentences_except_after_abbreviations(silver):
+    df = silver(
+        {
+            "unique_id": "a",
+            "description": "Dr. Rao runs City Hospital Pvt. Ltd. in Pune. Open 24/7!  Need help? Call now",
+        }
+    )
+
+    sentences = [text for item_id, kind, text in items_of(df) if kind == "description_sentence"]
+
+    assert sentences == [
+        "Dr. Rao runs City Hospital Pvt. Ltd. in Pune.",
+        "Open 24/7!",
+        "Need help?",
+        "Call now",  # Silver base already collapses whitespace
+    ]
+
+
+def test_missing_lists_and_description_give_no_items(silver):
+    assert items_of(silver({})) == []
+
+
+@pytest.fixture
+def tables(silver):
+    df = silver(
+        {"unique_id": "a", "specialties": '["cardiology"]', "description": "One. Two."},
+        {"unique_id": "b"},
+    ).withColumn("flag_pin_unverified", F.col("unique_id") == "b")
+    return (df, *build_gold(df))
+
+
+def test_real_output_passes_the_checks(tables):
+    check_gold(*tables)
+
+
+def test_a_score_that_does_not_replay_fails(tables):
+    silver_df, facilities, items = tables
+    broken = facilities.withColumn("confidence_score", F.lit(0.5))
+
+    with pytest.raises(ValueError, match=r"don't replay to confidence_score"):
+        check_gold(silver_df, broken, items)
+
+
+def test_a_changed_copied_value_fails(tables):
+    silver_df, facilities, items = tables
+    broken = facilities.withColumn("name", F.lit("Other"))
+
+    with pytest.raises(ValueError, match=r"name: 2 row\(s\) differ from Silver facilities"):
+        check_gold(silver_df, broken, items)
+
+
+def test_a_lost_item_fails(tables):
+    silver_df, facilities, items = tables
+    broken = items.where(F.col("item_type") != "specialty")
+
+    with pytest.raises(ValueError, match=r"specialty items: 1 Facilities"):
+        check_gold(silver_df, facilities, broken)
+
+
+def test_wrong_location_uncertain_fails(tables):
+    silver_df, facilities, items = tables
+    broken = facilities.withColumn("location_uncertain", F.lit(True))
+
+    with pytest.raises(ValueError, match=r"location_uncertain: 2 row\(s\) differ"):
+        check_gold(silver_df, broken, items)
+
+
+def test_score_counts(tables):
+    silver_df, facilities, _ = tables
+    counts = score_counts(silver_df, facilities)
+
+    assert counts["rules"]["flag_pin_unverified"] == 1
+    assert counts["worst_tier"] == {"critical": 1, "major": 0, "minor": 0, "none": 1}
+    assert counts["scores"] == {0.55: 1, 0.8: 1}
+    assert "flag_pin_unverified" in format_score_counts(counts)

@@ -32,4 +32,8 @@ SILVER = {name: _out("silver", name) for name in SOURCE}
 # Silver base: the first Silver stage (objective fixes only). SILVER["facilities"]
 # is Silver facilities, the final Silver stage, which reads from this.
 SILVER_BASE = {"facilities": _out("silver", "facilities_base")}
-GOLD = {}  # add gold tables here as the analysis takes shape, e.g. GOLD["facilities_by_district"] = _out("gold", "facilities_by_district")
+# Gold (spec #37): one row per Facility with its confidence score, and one row per claim.
+GOLD = {
+    "facilities": _out("gold", "facilities"),
+    "facility_items": _out("gold", "facility_items"),
+}
