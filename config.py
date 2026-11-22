@@ -60,6 +60,8 @@ APP = {
     "item_labels": _out("app", "item_labels"),
 }
 APP_PINCODES = BRONZE["pincodes"]
+# The NFHS-5 district and insurance coverage of each H3 cell, for the affordability factor.
+APP_AREA_CELLS = GOLD["district_cells"]
 APP_VS_ENDPOINT = "talaria-vs"
 APP_VS_INDEX = f"{OUTPUT_CATALOG}.{OUTPUT_SCHEMA}.app_facility_items_index"
 APP_EMBEDDING_MODEL = "databricks-gte-large-en"
