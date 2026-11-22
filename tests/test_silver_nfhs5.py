@@ -200,3 +200,12 @@ def test_reads_any_bronze_column_type(make_bronze):
     check_silver_nfhs5(bronze, silver)
 
     assert silver.first().households_surveyed == 874
+
+
+def test_reads_survey_sizes_from_a_double_column(make_bronze):
+    """On Databricks the source types the survey sizes as `double`, which read as `882.0`."""
+    bronze = make_bronze({}).withColumn("households_surveyed", F.lit(882.0).cast("double"))
+    silver = build_silver_nfhs5(bronze)
+    check_silver_nfhs5(bronze, silver)
+
+    assert silver.first().households_surveyed == 882

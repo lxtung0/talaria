@@ -34,4 +34,5 @@ def test_gold_tables_have_their_own_names():
     assert GOLD == {
         "facilities": "workspace.talaria.gold_facilities",
         "facility_items": "workspace.talaria.gold_facility_items",
+        "district_cells": "workspace.talaria.gold_district_cells",
     }

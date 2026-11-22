@@ -164,6 +164,16 @@ def _city_majority_links(rest: DataFrame, people: DataFrame, by_pin: DataFrame) 
     )
 
 
+OFFICE_COLUMNS = ["pin", "office_lat", "office_lon", "nfhs_state", "nfhs_district", "approximate"]
+
+
+def office_districts(pincodes: DataFrame, silver_nfhs5: DataFrame, aliases: list[DistrictAlias] | None = None) -> DataFrame:
+    """Every post office of `pincodes` (bronze) whose directory district names an NFHS-5 district,
+    through the same aliases as the facility link: `OFFICE_COLUMNS`."""
+    aliases = load_aliases() if aliases is None else aliases
+    return _offices(pincodes, _nfhs_districts(silver_nfhs5), _alias_table(silver_nfhs5, aliases)).select(*OFFICE_COLUMNS)
+
+
 def build_facility_districts(
     facilities: DataFrame, pincodes: DataFrame, silver_nfhs5: DataFrame, aliases: list[DistrictAlias] | None = None
 ) -> DataFrame:
