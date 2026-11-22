@@ -38,7 +38,16 @@ WARNING_FLAGS = {
     "flag_future_page_update": "Its page update date is in the future",
 }
 
-LIST_NAMES = {"specialties": "specialties", "procedure": "procedures", "equipment": "equipment", "capability": "capabilities"}
+LIST_NAMES = {
+    "specialties": "specialties",
+    "procedure": "procedures",
+    "equipment": "equipment",
+    "capability": "capabilities",
+    "phone_numbers": "phone numbers",
+    "websites": "websites",
+    "email": "emails",
+    "source_urls": "sources",
+}
 
 
 def location_approximate(facility: dict) -> bool:

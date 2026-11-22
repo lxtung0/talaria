@@ -137,12 +137,12 @@ def test_parse_llm_output_rejects_a_reply_without_labels():
         labels.parse_llm_output("Sorry, I can't help with that.")
 
 
-def test_similarity_fallback_labels_direct_from_090_and_related_from_080():
-    hits = [hit("equipment", similarity=s, item_id=str(s)) for s in (0.95, 0.9, 0.85, 0.8, 0.79)]
+def test_similarity_fallback_labels_direct_from_090_and_related_from_min_similarity():
+    hits = [hit("equipment", similarity=s, item_id=str(s)) for s in (0.95, 0.9, 0.85, 0.7, 0.69)]
 
     fallback = labels.similarity_fallback(hits)
 
-    assert [fallback[str(s)]["label"] for s in (0.95, 0.9, 0.85, 0.8, 0.79)] == [
+    assert [fallback[str(s)]["label"] for s in (0.95, 0.9, 0.85, 0.7, 0.69)] == [
         "direct", "direct", "related", "related", "unrelated"
     ]
     assert all("Evidence not checked" in v["reason"] for v in fallback.values())

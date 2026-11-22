@@ -44,13 +44,18 @@ items = items.join(spark.table(APP["facilities"]).select("unique_id", "h3_r5"), 
 # Merge rather than overwrite, so a rebuild only changes rows whose text or cell
 # changed, and the triggered index sync only re-embeds those.
 if spark.catalog.tableExists(APP["facility_items"]):
+    updated = {c: f"s.{c}" for c in ["unique_id", "item_type", "item_text", "h3_r5"]}
+    if "embedding" in spark.table(APP["facility_items"]).columns:
+        # A changed text needs a new embedding (the Delta fallback fills NULLs below).
+        updated["embedding"] = "CASE WHEN t.item_text <=> s.item_text THEN t.embedding END"
     (
         DeltaTable.forName(spark, APP["facility_items"]).alias("t")
         .merge(items.alias("s"), "t.item_id = s.item_id")
-        .whenMatchedUpdateAll(
-            condition="NOT (t.item_text <=> s.item_text AND t.h3_r5 <=> s.h3_r5 AND t.item_type <=> s.item_type)"
+        .whenMatchedUpdate(
+            condition="NOT (t.item_text <=> s.item_text AND t.h3_r5 <=> s.h3_r5 AND t.item_type <=> s.item_type)",
+            set=updated,
         )
-        .whenNotMatchedInsertAll()
+        .whenNotMatchedInsert(values={c: f"s.{c}" for c in items.columns})
         .whenNotMatchedBySourceDelete()
         .execute()
     )
@@ -87,7 +92,18 @@ if APP_SEARCH_PATH == "delta":
         WHEN MATCHED THEN UPDATE SET t.embedding = s.embedding""")
     filled = spark.table(APP["facility_items"]).where("embedding IS NOT NULL").count()
     summary.append(f"Delta fallback: {filled:,} items have embeddings")
-    print(summary[-1])
+    # Test query: "kidney machine" in one Patna-area H3 cell, by cosine similarity.
+    test = spark.sql(f"""
+        WITH q AS (SELECT ai_query('{APP_EMBEDDING_MODEL}', 'kidney machine') AS v)
+        SELECT item_type, item_text,
+            aggregate(zip_with(embedding, q.v, (a, b) -> a * b), 0D, (acc, x) -> acc + x)
+            / (sqrt(aggregate(embedding, 0D, (acc, x) -> acc + x * x)) * sqrt(aggregate(q.v, 0D, (acc, x) -> acc + x * x))) AS similarity
+        FROM {APP['facility_items']} CROSS JOIN q
+        WHERE h3_r5 = h3_longlatash3string(85.1376, 25.5941, 5)
+        ORDER BY similarity DESC LIMIT 10""").collect()
+    summary.append('"kidney machine" in the Patna cell:')
+    summary.extend(f"  {r.similarity:.3f} {r.item_type:<12} {r.item_text}" for r in test)
+    print("\n".join(summary))
     dbutils.notebook.exit("\n".join(summary))
 
 # COMMAND ----------

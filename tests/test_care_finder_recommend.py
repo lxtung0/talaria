@@ -137,7 +137,7 @@ def test_hits_below_min_similarity_are_dropped_before_labelling():
     sent = []
 
     def search_band(cells):
-        return [{"item_id": "a", "unique_id": "f", "item_type": "equipment", "item_text": "x", "h3_r5": cells[0], "similarity": 0.7}]
+        return [{"item_id": "a", "unique_id": "f", "item_type": "equipment", "item_text": "x", "h3_r5": cells[0], "similarity": 0.6}]
 
     def label_hits(hits):
         sent.extend(hits)
@@ -270,3 +270,15 @@ def test_rounds_list_each_band_and_the_facilities_checked_in_it_with_their_best_
     assert rounds[2]["facilities"] == [{"unique_id": "mid", "lat": mid_lat, "lon": mid_lon, "label": "related"}]
     assert rounds[4]["facilities"] == [{"unique_id": "far", "lat": far_lat, "lon": far_lon, "label": "direct"}]
     assert rounds[1]["facilities"] == []
+
+
+def test_a_repeat_makes_no_llm_call_even_when_more_hits_than_are_sent_were_found():
+    points = ring_points(1, 6) + ring_points(2, 12)
+    facilities = [facility_at(lat, lon, f"f{i}") for i, (lat, lon) in enumerate(points)]
+    backend = FakeBackend(facilities, {f"f{i}": ("capability", "Dialysis", 0.95 - i * 0.001) for i in range(18)}, llm_labels={f"f{i}-e0": "related" for i in range(18)})
+
+    recommend("dialysis", "Patna", backend=backend)
+    calls = backend.chat_calls
+    recommend("dialysis", "Patna", backend=backend)
+
+    assert backend.chat_calls == calls

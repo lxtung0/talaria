@@ -180,9 +180,14 @@ def resolve_location(text: str, backend) -> Place | list[Place]:
 
 
 def _label_hits(service, hits, cache, new_labels, backend, settings):
-    """Cached labels first; one LLM call for the rest; the similarity fallback if it fails."""
-    labels = {h["item_id"]: cache[h["item_id"]] for h in hits if h["item_id"] in cache}
-    to_check = labels_mod.select_for_llm([h for h in hits if h["item_id"] not in cache], settings)
+    """Cached labels first; one LLM call for the rest; the similarity fallback if it fails.
+
+    Only the selected hits (top hits of the top Facilities) are labelled, cached or not,
+    so the same query labels the same hits every time and a repeat needs no LLM call.
+    """
+    selected = labels_mod.select_for_llm(hits, settings)
+    labels = {h["item_id"]: cache[h["item_id"]] for h in selected if h["item_id"] in cache}
+    to_check = [h for h in selected if h["item_id"] not in cache]
     info = {"cache_hits": len(labels), "llm_calls": 0, "fallback_used": False}
     if to_check:
         info["llm_calls"] = 1

@@ -14,7 +14,10 @@ class Settings:
 
     # Vector Search and the LLM check.
     results_per_round: int = 75
-    min_similarity: float = 0.80  # hits below this are dropped
+    # Similarity is cosine on databricks-gte-large-en embeddings. Measured on the data:
+    # "kidney machine" → "State-of-the-art dialysis machines" is 0.76, so the spec's
+    # placeholder 0.80 would drop the very match the app is meant to find.
+    min_similarity: float = 0.70  # hits below this are dropped
     fallback_direct_similarity: float = 0.90  # similarity fallback: >= this is direct, else related
     llm_hits_per_facility: int = 5
     llm_facilities: int = 15

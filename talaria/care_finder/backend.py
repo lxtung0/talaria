@@ -116,18 +116,21 @@ class DatabricksBackend:
         ]
 
     def _search_band_delta(self, service: str, cells: list[str], num_results: int) -> list[dict]:
-        """The fallback path (#27): cosine similarity against the `embedding` column, in SQL."""
-        response = self.w.api_client.do("POST", f"/serving-endpoints/{APP_EMBEDDING_MODEL}/invocations", body={"input": [service]})
+        """The fallback path (#27): cosine similarity against the `embedding` column, in SQL.
+
+        The query is embedded in the same statement with `ai_query`, like the column was.
+        """
         return self.sql(
-            f"""WITH q AS (SELECT from_json(:q, 'array<double>') AS v)
+            f"""WITH q AS (SELECT ai_query('{APP_EMBEDDING_MODEL}', :service) AS v),
+            band AS (SELECT * FROM {APP['facility_items']}
+                     WHERE array_contains(from_json(:cells, 'array<string>'), h3_r5) AND embedding IS NOT NULL)
             SELECT item_id, unique_id, item_type, item_text, h3_r5,
-                aggregate(zip_with(embedding, q.v, (a, b) -> a * b), 0D, (acc, x) -> acc + x)
-                / (sqrt(aggregate(embedding, 0D, (acc, x) -> acc + x * x)) * sqrt(aggregate(q.v, 0D, (acc, x) -> acc + x * x)))
+                aggregate(zip_with(band.embedding, q.v, (a, b) -> a * b), 0D, (acc, x) -> acc + x)
+                / (sqrt(aggregate(band.embedding, 0D, (acc, x) -> acc + x * x)) * sqrt(aggregate(q.v, 0D, (acc, x) -> acc + x * x)))
                 AS similarity
-            FROM {APP['facility_items']}, q
-            WHERE array_contains(from_json(:cells, 'array<string>'), h3_r5) AND embedding IS NOT NULL
+            FROM band CROSS JOIN q
             ORDER BY similarity DESC LIMIT {int(num_results)}""",
-            q=json.dumps(response["data"][0]["embedding"]),
+            service=service,
             cells=json.dumps(cells),
         )
 
