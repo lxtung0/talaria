@@ -105,9 +105,11 @@ def desert_alert(answer: dict) -> str | None:
         f"(about {d['threshold_km']:.0f} km) of {place}, the limit for {urgency} care."
     )
     if d["rings_needed"] is None:
-        return text + f" None was found within about {answer['search']['searched_radius_km']:.0f} km."
-    nearest = f"{d['nearest_direct_km']:.0f} km away, " if d["nearest_direct_km"] is not None else ""
-    return text + f" The nearest that does is {nearest}{d['rings_needed']} rings out."
+        text += f" None was found within about {answer['search']['searched_radius_km']:.0f} km."
+    else:
+        nearest = f"{d['nearest_direct_km']:.0f} km away, " if d["nearest_direct_km"] is not None else ""
+        text += f" The nearest that does is {nearest}{d['rings_needed']} rings out."
+    return text + f" It is highly recommended that a facility offering {service} be added at {place}."
 
 
 def search_extent(answer: dict) -> str:

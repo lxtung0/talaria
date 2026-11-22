@@ -109,11 +109,13 @@ def test_desert_alert_names_the_threshold_and_the_nearest_match():
 
     assert text == (
         "Possible healthcare desert: no facility says it offers dialysis within 6 map rings (about 112 km) "
-        "of Patna, Bihar, the limit for planned care. The nearest that does is 142 km away, 8 rings out."
+        "of Patna, Bihar, the limit for planned care. The nearest that does is 142 km away, 8 rings out. "
+        "It is highly recommended that a facility offering dialysis be added at Patna, Bihar."
     )
 
 
 def test_desert_alert_when_nothing_was_found():
     text = present.desert_alert({**answer([], radius=250.0, stop="max radius reached"), "desert": _desert(rings_needed=None, nearest_direct_km=None)})
 
-    assert text.endswith("None was found within about 250 km.")
+    assert "None was found within about 250 km." in text
+    assert text.endswith("It is highly recommended that a facility offering dialysis be added at Patna, Bihar.")
