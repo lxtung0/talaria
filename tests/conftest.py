@@ -7,6 +7,8 @@ import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql import types as T
 
+from talaria.silver_base import build_silver_base
+
 # Bronze facilities schema: the source `facilities` table (every column is text
 # apart from latitude/longitude) plus the two columns the bronze ingest adds.
 _SOURCE_COLUMNS = [
@@ -129,3 +131,21 @@ def make_pincodes(spark):
 def no_pincodes(make_pincodes):
     """An empty pincode directory, for tests that don't exercise the state check."""
     return make_pincodes()
+
+
+@pytest.fixture
+def make_silver_inputs(make_bronze, no_pincodes):
+    """Matching `(bronze, silver_base)` inputs for Silver facilities, from partial bronze rows.
+
+    Silver base is the real `build_silver_base` output, materialized as the notebook
+    reads it from a table. Pass `pincodes` when the state check matters.
+
+        bronze, silver_base = make_silver_inputs({"officialPhone": "98765 43210"})
+    """
+
+    def build(*rows, pincodes=None):
+        bronze = make_bronze(*rows)
+        silver_base = build_silver_base(bronze, no_pincodes if pincodes is None else pincodes)
+        return bronze, silver_base.localCheckpoint()
+
+    return build
