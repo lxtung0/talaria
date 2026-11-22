@@ -11,13 +11,13 @@ def _silver(spark, rows):
     return spark.createDataFrame(rows, "unique_id string, name string, specialties array<string>")
 
 
-def test_real_silver_base_output_passes(make_bronze):
+def test_real_silver_base_output_passes(make_bronze, no_pincodes):
     bronze = make_bronze(
         {"name": " null ", "specialties": '["", "cardiology", "Cardiology"]', "email": "[]"},
         {"name": "City Hospital", "phone_numbers": '["98765 43210"]'},
     )
 
-    check_silver_base(build_silver_base(bronze))
+    check_silver_base(build_silver_base(bronze, no_pincodes))
 
 
 def test_null_unique_id_fails(spark):

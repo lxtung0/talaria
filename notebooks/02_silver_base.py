@@ -2,7 +2,7 @@
 # MAGIC %md
 # MAGIC # 02 · Silver base
 # MAGIC Builds the first Silver stage for facilities: objective fixes only (spec #1).
-# MAGIC Reads bronze facilities, runs `build_silver_base`, checks the result against live data,
+# MAGIC Reads bronze facilities and the bronze pincode directory, runs `build_silver_base`, checks the result against live data,
 # MAGIC prints before/after counts per step, then overwrites the Silver base table.
 # MAGIC A failed runtime check stops the run before anything is written.
 
@@ -21,7 +21,9 @@ from talaria.silver_base.step_counts import format_step_counts, step_counts
 # COMMAND ----------
 
 bronze = spark.table(BRONZE["facilities"])
-silver_base = build_silver_base(bronze)
+# Each Facility's state is checked against the pincode directory (#9).
+pincodes = spark.table(BRONZE["pincodes"])
+silver_base = build_silver_base(bronze, pincodes)
 
 # COMMAND ----------
 

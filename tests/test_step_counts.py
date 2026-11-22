@@ -10,11 +10,11 @@ from talaria.silver_base import build_silver_base
 from talaria.silver_base.step_counts import format_step_counts, step_counts
 
 
-def _counts(bronze):
-    return step_counts(bronze, build_silver_base(bronze))
+def _counts(bronze, pincodes):
+    return step_counts(bronze, build_silver_base(bronze, pincodes))
 
 
-def test_rows_removed_by_reason(make_bronze):
+def test_rows_removed_by_reason(make_bronze, no_pincodes):
     duplicate = {"unique_id": "dup", "name": "City Hospital"}
     bronze = make_bronze(
         duplicate,
@@ -25,7 +25,7 @@ def test_rows_removed_by_reason(make_bronze):
         {"unique_id": "kept"},
     )
 
-    assert _counts(bronze)["rows"] == {
+    assert _counts(bronze, no_pincodes)["rows"] == {
         "bronze": 6,
         "description_fragments_removed": 2,
         "exact_duplicates_removed": 2,
@@ -33,7 +33,7 @@ def test_rows_removed_by_reason(make_bronze):
     }
 
 
-def test_values_set_to_null_by_type_of_missing_value(make_bronze):
+def test_values_set_to_null_by_type_of_missing_value(make_bronze, no_pincodes):
     bronze = make_bronze(
         {
             "name": " NULL ",
@@ -47,7 +47,7 @@ def test_values_set_to_null_by_type_of_missing_value(make_bronze):
         {"email": "[email protected]", "procedure": "null"},
     )
 
-    assert _counts(bronze)["nulls"] == {
+    assert _counts(bronze, no_pincodes)["nulls"] == {
         "null_text": 2,
         "empty_text": 1,
         "empty_array_text": 1,
@@ -57,7 +57,7 @@ def test_values_set_to_null_by_type_of_missing_value(make_bronze):
     }
 
 
-def test_items_removed_per_list_column(make_bronze):
+def test_items_removed_per_list_column(make_bronze, no_pincodes):
     bronze = make_bronze(
         {
             "specialties": '["", "Cardiology", "cardiology", null]',
@@ -68,7 +68,7 @@ def test_items_removed_per_list_column(make_bronze):
         {"affiliationTypeIds": '["private", "Private-Entity"]', "equipment": "[]"},
     )
 
-    assert _counts(bronze)["items_removed"] == {
+    assert _counts(bronze, no_pincodes)["items_removed"] == {
         "specialties": 3,
         "procedure": 0,
         "equipment": 0,
@@ -81,7 +81,7 @@ def test_items_removed_per_list_column(make_bronze):
     }
 
 
-def test_spelling_fixes_per_alias_table(make_bronze):
+def test_spelling_fixes_per_alias_table(make_bronze, no_pincodes):
     bronze = make_bronze(
         {
             "facilityTypeId": "Farmacy",
@@ -96,7 +96,7 @@ def test_spelling_fixes_per_alias_table(make_bronze):
         {"address_stateOrRegion": "Thane"},
     )
 
-    assert _counts(bronze)["spelling_fixes"] == {
+    assert _counts(bronze, no_pincodes)["spelling_fixes"] == {
         "facility_type": 1,
         "operator_type": 1,
         "affiliation_type": 2,
@@ -106,7 +106,7 @@ def test_spelling_fixes_per_alias_table(make_bronze):
     }
 
 
-def test_values_formatted_vs_left_unchanged(make_bronze):
+def test_values_formatted_vs_left_unchanged(make_bronze, no_pincodes):
     bronze = make_bronze(
         {
             "address_zipOrPostcode": "201 301",
@@ -120,7 +120,7 @@ def test_values_formatted_vs_left_unchanged(make_bronze):
         {"address_zipOrPostcode": "110001"},
     )
 
-    assert _counts(bronze)["formatting"] == {
+    assert _counts(bronze, no_pincodes)["formatting"] == {
         "address_pincode_formatted": 1,
         "address_pincode_unchanged": 2,
         "official_phone_formatted": 1,
@@ -138,7 +138,7 @@ def test_values_formatted_vs_left_unchanged(make_bronze):
     }
 
 
-def test_flags_set(make_bronze):
+def test_flags_set(make_bronze, no_pincodes):
     fifty = json.dumps(["Cardiology"] * 50)
     bronze = make_bronze(
         {"specialties": fifty, "procedure": fifty},
@@ -147,7 +147,7 @@ def test_flags_set(make_bronze):
         {"capacity": "20"},
     )
 
-    assert _counts(bronze)["flags"] == {
+    assert _counts(bronze, no_pincodes)["flags"] == {
         "needs_investigation": 2,
         "truncated_specialties": 2,
         "truncated_procedure": 1,
@@ -159,11 +159,47 @@ def test_flags_set(make_bronze):
         "truncated_affiliation_types": 0,
         "truncated_email": 0,
         "zero_beds": 2,
+        "state_corrected": 0,
+        "pin_mismatch": 0,
+        "address_conflict": 0,
+        "pin_unverified": 0,
     }
 
 
-def test_formatted_report_lists_every_count_by_section(make_bronze):
-    report = format_step_counts(_counts(make_bronze({}, {})))
+def test_state_check_flags_and_states_corrected(make_bronze, make_pincodes):
+    bronze = make_bronze(
+        # Corrected twice: Andhra Pradesh -> Telangana.
+        {"address_city": "Hyderabad", "address_stateOrRegion": "Andhra Pradesh", "address_zipOrPostcode": "500001"},
+        {"address_city": "Hyderabad", "address_stateOrRegion": "andhra pradesh", "address_zipOrPostcode": "500001"},
+        # PIN mismatch.
+        {"address_city": "Nagpur", "address_stateOrRegion": "Maharashtra", "address_zipOrPostcode": "500001"},
+        # Address conflict.
+        {"address_city": "Sector 5", "address_stateOrRegion": "Kerala", "address_zipOrPostcode": "500001"},
+        # PIN unverified.
+        {"address_city": "Hyderabad", "address_stateOrRegion": "Telangana", "address_zipOrPostcode": "999999"},
+        # Agrees.
+        {"address_city": "Hyderabad", "address_stateOrRegion": "Tamilnadu", "address_zipOrPostcode": "600001"},
+    )
+    pincodes = make_pincodes(
+        (500001, "HYDERABAD", "TELANGANA"), (440001, "NAGPUR", "MAHARASHTRA"), (600001, "CHENNAI", "TAMIL NADU")
+    )
+
+    counts = _counts(bronze, pincodes)
+
+    assert {k: v for k, v in counts["flags"].items() if k in _STATE_FLAGS} == {
+        "state_corrected": 2,
+        "pin_mismatch": 1,
+        "address_conflict": 1,
+        "pin_unverified": 1,
+    }
+    assert counts["state_check"] == {"states_corrected": 2}
+
+
+_STATE_FLAGS = {"state_corrected", "pin_mismatch", "address_conflict", "pin_unverified"}
+
+
+def test_formatted_report_lists_every_count_by_section(make_bronze, no_pincodes):
+    report = format_step_counts(_counts(make_bronze({}, {}), no_pincodes))
 
     assert report.splitlines()[:5] == [
         "rows",
@@ -172,5 +208,5 @@ def test_formatted_report_lists_every_count_by_section(make_bronze):
         "  exact_duplicates_removed: 0",
         "  silver_base: 2",
     ]
-    for section in ["nulls", "items_removed", "spelling_fixes", "formatting", "flags"]:
+    for section in ["nulls", "items_removed", "spelling_fixes", "formatting", "flags", "state_check"]:
         assert section in report.splitlines()

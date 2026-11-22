@@ -31,8 +31,9 @@ def step_counts(bronze: DataFrame, silver: DataFrame) -> Counts:
     - `spelling_fixes`: values and list items changed, per alias table.
     - `formatting`: values and list items formatted vs left unchanged, per formatted column.
     - `flags`: Facilities with each flag set.
+    - `state_check`: states corrected by the pincode directory check (#9).
 
-    `silver` must be `build_silver_base(bronze)`.
+    `silver` must be `build_silver_base(bronze, pincodes)`.
     """
     bronze_rows = bronze.count()
     real = bronze.where(F.col("source_urls").isNotNull())
@@ -56,6 +57,7 @@ def step_counts(bronze: DataFrame, silver: DataFrame) -> Counts:
         "spelling_fixes": _spelling_fixes(kept),
         "formatting": _formatting(kept),
         "flags": _flags(silver),
+        "state_check": _state_check(paired),
     }
     return counts
 
@@ -168,7 +170,7 @@ def _formatting(kept: DataFrame) -> dict[str, int]:
 
 
 def _flags(silver: DataFrame) -> dict[str, int]:
-    """Facilities with each flag set: Needs investigation, each Truncated list column, zero beds."""
+    """Facilities with each flag set: Needs investigation, each Truncated list column, zero beds, the state check."""
     list_columns = [_RENAMES.get(name, name) for name in _LIST_COLUMNS]
     row = silver.agg(
         F.count(F.when(F.col("needs_investigation"), 1)).alias("needs_investigation"),
@@ -177,8 +179,20 @@ def _flags(silver: DataFrame) -> dict[str, int]:
             for name in list_columns
         ],
         F.count(F.when(F.col("flag_zero_beds"), 1)).alias("zero_beds"),
+        *[F.count(F.when(F.col(f"flag_{name}"), 1)).alias(name) for name in _STATE_CHECK_FLAGS],
     ).first()
     return row.asDict()
+
+
+# The state check's flags (#9), without their `flag_` prefix.
+_STATE_CHECK_FLAGS = ["state_corrected", "pin_mismatch", "address_conflict", "pin_unverified"]
+
+
+def _state_check(paired: DataFrame) -> dict[str, int]:
+    """Facilities whose Silver base state differs from their Spelling-fixed bronze state."""
+    fixed = spelling.state(clean_text(F.col("address_stateOrRegion")))
+    row = paired.agg(F.count(F.when(~fixed.eqNullSafe(_silver("address_stateOrRegion")), 1)).alias("n")).first()
+    return {"states_corrected": row.n}
 
 
 def _count_values(name: str, predicate: Callable[[Column], Column]) -> Column:

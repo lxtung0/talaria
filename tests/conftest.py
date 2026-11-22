@@ -86,3 +86,44 @@ def make_bronze(spark):
         return spark.createDataFrame(records, BRONZE_SCHEMA)
 
     return build
+
+
+# Bronze pincode directory schema: the source table plus the bronze ingest columns.
+PINCODES_SCHEMA = T.StructType(
+    [
+        T.StructField(name, T.LongType() if name == "pincode" else T.StringType())
+        for name in [
+            "circlename", "regionname", "divisionname", "officename", "pincode",
+            "officetype", "delivery", "district", "statename", "latitude", "longitude",
+        ]
+    ]
+    + [
+        T.StructField("_source_table", T.StringType()),
+        T.StructField("_ingested_at", T.TimestampType()),
+    ]
+)
+
+
+@pytest.fixture
+def make_pincodes(spark):
+    """Build a fake bronze pincode directory from `(pincode, district, statename)` post offices.
+
+        pincodes = make_pincodes((500001, "HYDERABAD", "TELANGANA"))
+    """
+
+    def build(*offices):
+        records = [
+            {"pincode": pincode, "district": district, "statename": state, "officename": f"Office {i}"}
+            for i, (pincode, district, state) in enumerate(offices)
+        ]
+        return spark.createDataFrame(
+            [tuple(r.get(name) for name in PINCODES_SCHEMA.fieldNames()) for r in records], PINCODES_SCHEMA
+        )
+
+    return build
+
+
+@pytest.fixture
+def no_pincodes(make_pincodes):
+    """An empty pincode directory, for tests that don't exercise the state check."""
+    return make_pincodes()

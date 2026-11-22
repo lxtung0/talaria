@@ -11,7 +11,7 @@ from pyspark.sql import Column, DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
 
-from talaria.silver_base import formatting, spelling
+from talaria.silver_base import formatting, spelling, state_check
 from talaria.silver_base.text import clean_text
 
 # Spec #1, "Columns dropped (16)".
@@ -82,8 +82,11 @@ _RENAMES = {
 }
 
 
-def build_silver_base(bronze: DataFrame) -> DataFrame:
+def build_silver_base(bronze: DataFrame, pincodes: DataFrame) -> DataFrame:
     """Turn the bronze facilities snapshot into Silver base, one row per Facility.
+
+    `pincodes` is the bronze India Post pincode directory, the reference each
+    Facility's state is checked against (#9).
 
     Raises ValueError if `unique_id` is null or repeated after cleanup.
     """
@@ -103,6 +106,9 @@ def build_silver_base(bronze: DataFrame) -> DataFrame:
     df = _remove_empty_and_duplicate_items(df)
     # 6. Zero-doctors and zero-beds rules, repeated address line, date rewrite.
     df = _apply_value_rules(df)
+    # 6b. State checked against the pincode directory (#9): the one value Silver
+    #     base takes from another table. Needs the state Spelling fix and PIN format.
+    df = state_check.check_state(df, pincodes)
     # 7. Convert types, then rename columns.
     df = _convert_types(df)
     df = _rename_columns(df)
