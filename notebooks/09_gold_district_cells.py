@@ -26,7 +26,7 @@ silver_nfhs5 = spark.table(SILVER["nfhs5"])
 offices = office_districts(spark.table(BRONZE["pincodes"]), silver_nfhs5)
 # H3 functions only exist on Databricks, so the cell is added here, not in the package.
 offices = offices.withColumn("h3_r5", F.expr("h3_longlatash3string(office_lon, office_lat, 5)"))
-cells = build_district_cells(offices, silver_nfhs5).cache()
+cells = build_district_cells(offices, silver_nfhs5)
 
 # COMMAND ----------
 
