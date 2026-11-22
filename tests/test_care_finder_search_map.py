@@ -52,3 +52,16 @@ def test_replay_rebuilds_the_live_events_and_ends_on_the_named_top_results():
     assert [e["type"] for e in replay_events(answer)] == ["located", "band", "found", "checked", "band", "found", "checked"]
     assert view_after_round(answer, 0).caption() == "Round 1 · 0 confirmed, 0 related, 1 ruled out · 0 confirmed so far"
     assert view_after_round(answer, 1).caption() == "Done after 2 rounds, about 42 km · 1. Y Hospital"
+
+
+def test_the_final_view_tints_the_desert_area_red():
+    import h3
+
+    start = h3.latlng_to_cell(25.6, 85.1, 5)
+    view = SearchView()
+    for event in [_events()[0], {"type": "band", "round": 1, "k": 1, "radius_km": 26.9, "cells": sorted(h3.grid_disk(start, 2))}]:
+        view.apply(event)
+    view.finish([], {"is_desert": True, "start_cell": start, "threshold_k": 1})
+
+    assert view.desert_cells == set(h3.grid_disk(start, 1))
+    view.deck()
