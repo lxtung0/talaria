@@ -33,3 +33,19 @@ SILVER = {name: _out("silver", name) for name in SOURCE}
 # is Silver facilities, the final Silver stage, which reads from this.
 SILVER_BASE = {"facilities": _out("silver", "facilities_base")}
 GOLD = {}  # add gold tables here as the analysis takes shape, e.g. GOLD["facilities_by_district"] = _out("gold", "facilities_by_district")
+
+# Care finder app (spec #26). The app reads one source Facilities table; swap
+# APP_SOURCE_FACILITIES to the Gold table once it exists (a one-line change).
+APP_SOURCE_FACILITIES = SILVER["facilities"]
+APP = {
+    "facilities": _out("app", "facilities"),
+    "facility_items": _out("app", "facility_items"),
+    "item_labels": _out("app", "item_labels"),
+}
+APP_PINCODES = BRONZE["pincodes"]
+APP_VS_ENDPOINT = "talaria-vs"
+APP_VS_INDEX = f"{OUTPUT_CATALOG}.{OUTPUT_SCHEMA}.app_facility_items_index"
+APP_EMBEDDING_MODEL = "databricks-gte-large-en"
+APP_CHAT_MODEL = "databricks-meta-llama-3-3-70b-instruct"
+APP_WAREHOUSE_ID = "3a60f8ef7e0a6731"  # Serverless Starter Warehouse
+APP_NAME = "talaria-care-finder"
