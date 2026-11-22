@@ -127,3 +127,28 @@ def test_confidence_score_is_copied_when_the_source_has_it(make_source):
     facilities, _ = build_app_tables(source)
 
     assert facilities.collect()[0].confidence_score == 0.83
+
+
+def test_gold_supplies_the_confidence_and_drops_facilities_it_leaves_out(make_source, spark):
+    source = make_source(
+        {"unique_id": "f1", "equipment": ["MRI"]},
+        {"unique_id": "vet", "equipment": ["X-ray"]},
+    )
+    gold = spark.createDataFrame(
+        [("f1", 0.67, ["start 80", "-10 [major] flag_single_source_domain", "cap 75 [major]"])],
+        "unique_id string, confidence_score double, confidence_reasons array<string>",
+    )
+
+    facilities, items = build_app_tables(source, gold)
+
+    rows = facilities.collect()
+    assert [r.unique_id for r in rows] == ["f1"]
+    assert rows[0].confidence_score == 0.67
+    assert rows[0].confidence_reasons == ["start 80", "-10 [major] flag_single_source_domain", "cap 75 [major]"]
+    assert {r.unique_id for r in items.collect()} == {"f1"}
+
+
+def test_without_gold_the_confidence_log_is_empty(make_source):
+    facilities, _ = build_app_tables(make_source({"unique_id": "f1"}))
+
+    assert facilities.collect()[0].confidence_reasons is None

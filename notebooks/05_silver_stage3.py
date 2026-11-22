@@ -21,7 +21,8 @@ from talaria.silver_stage3.rule_counts import replaced_flag_crosstabs, rule_coun
 # COMMAND ----------
 
 silver_facilities = spark.table(SILVER["facilities"])
-stage3 = build_silver_stage3(silver_facilities, load_references()).cache()
+# No .cache(): serverless compute doesn't support persisting, so Stage 3 is recomputed for each check.
+stage3 = build_silver_stage3(silver_facilities, load_references())
 
 # COMMAND ----------
 

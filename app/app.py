@@ -172,6 +172,9 @@ def card(result: dict, position: int) -> None:
             hits = pd.DataFrame(result["evidence"])[["item_type", "item_text", "similarity", "label", "value", "counted"]]
             st.dataframe(hits, hide_index=True, width="stretch")
             st.code(present.formula_text(answer), language=None)
+            if result.get("confidence_reasons"):
+                st.markdown("**Record confidence, from Gold**")
+                st.code("\n".join(result["confidence_reasons"]), language=None)
             st.json({k: answer["settings"][k] for k in ("min_direct_facilities", "max_k", "min_similarity", "type_weights", "label_values")}, expanded=False)
 
 
