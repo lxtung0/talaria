@@ -68,7 +68,7 @@ def test_summary_never_calls_weak_evidence_strong():
 def test_summary_counts_the_strong_results():
     text = present.summary(answer([result(), result(band="some")]))
 
-    assert text.startswith("1 of these 2 facilities have strong evidence")
+    assert text.startswith("1 of these 2 facilities has strong evidence")
 
 
 def test_other_line_names_the_parts_that_scored_worse():

@@ -84,7 +84,8 @@ def summary(answer: dict) -> str:
             f"No facility with strong evidence for {service} within about {radius:.0f} km of {place}. "
             f"The nearest with any evidence is {nearest['name']}, {distance_text(nearest)}."
         )
-    return f"{len(strong)} of these {len(top)} facilities have strong evidence for {service}, searched up to about {radius:.0f} km from {place}."
+    verb = "has" if len(strong) == 1 else "have"
+    return f"{len(strong)} of these {len(top)} facilities {verb} strong evidence for {service}, searched up to about {radius:.0f} km from {place}."
 
 
 def search_extent(answer: dict) -> str:
