@@ -41,7 +41,7 @@ Run notebooks in order:
   - `flag_counts.py`: `flag_counts` and `format_flag_counts`, the per-flag counts the notebook prints.
   - One module per flag group (`contacts.py` is group A, `size.py` B, `specialty.py` C, `description.py` D, `affiliation.py` E, `sources.py` F, `page_dates.py` G, `location.py` H). To add a group: write its `add_columns` in a new module, call it in `pipeline.py`, list its columns in `columns.py`.
 - `talaria/care_finder/`: the care finder app's logic (spec #26). `items.py` is the only Spark module: `build_app_tables(facilities) -> (app_facilities, app_facility_items)` for `03_app_tables`. The rest is plain Python, so the app imports it without Spark:
-  - `recommend.py`: `recommend(service, location, urgency)`, the query flow. All IO goes through `backend.py` (SQL warehouse, Vector Search, model serving), so tests pass a fake backend.
+  - `recommend.py`: `recommend(service, location, urgency)`, the query flow. All IO goes through `backend.py` (SQL warehouse, search, model serving), so tests pass a fake backend.
   - `search.py`: the expanding H3 ring loop; `labels.py`: the LLM check prompt, output validation and similarity fallback; `scoring.py`: hit values, noisy-OR, rank and bands; `reasons.py`: flag → fixed warning or ✓ line; `location.py`: PIN / district / city / coordinates parsing.
   - `settings.py`: every tunable number. `present.py`: the UI's text templates. `search_map.py`: the animated pydeck map.
 - `app/`: the Streamlit app (`app.py`, `app.yaml`, `requirements.txt`). `scripts/build_app.sh` bundles it with the package for deploy.
@@ -66,7 +66,7 @@ Test Silver facilities rules only through `build_silver_facilities`: get `bronze
 
 The care finder (spec #26) is a Streamlit Databricks App, `talaria-care-finder`: a service and a location in, the best 3 Facilities out, each with verbatim quotes, warnings and a "How we decided" section.
 
-**Build its data** (once, and after the source table changes): run `notebooks/03_app_tables`. It writes `app_facilities` and `app_facility_items` and creates or syncs the Vector Search index `app_facility_items_index` on endpoint `talaria-vs`. `notebooks/04_recommend_demo` runs five demo queries through `recommend()`.
+**Build its data** (once, and after the source table changes): run `notebooks/03_app_tables`. It writes `app_facilities` and `app_facility_items` (one row per claim). With `APP_SEARCH_PATH = "delta"` in `config.py`, the current setting, it fills an `embedding` column with `ai_query`, and the app finds matching claims by cosine similarity in SQL. With `"vector_search"` it creates or syncs the Vector Search index `app_facility_items_index` on endpoint `talaria-vs` instead, which was too slow to fill on Free Edition. `notebooks/04_recommend_demo` runs five demo queries through `recommend()`.
 
 **Local run** (uses your `DEFAULT` Databricks CLI profile):
 
@@ -75,7 +75,7 @@ uv sync
 uv run streamlit run app/app.py
 ```
 
-**Deploy:** `./scripts/deploy_app.sh` stages `app/` plus `config.py` and `talaria/care_finder/` into `build/app`, syncs it to the workspace and deploys. It starts the app if it's stopped.
+**Deploy:** `./scripts/deploy_app.sh` applies the app's permissions, stages `app/` plus `config.py` and `talaria/care_finder/` into `build/app`, uploads it to the workspace and deploys. It starts the app if it's stopped.
 
 **Stop / start** (the app uses Free Edition compute while running):
 
