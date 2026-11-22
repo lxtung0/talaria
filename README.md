@@ -46,7 +46,7 @@ Run notebooks in order:
   - One module per flag group (`contacts.py` is group A, `size.py` B, `specialty.py` C, `description.py` D, `affiliation.py` E, `sources.py` F, `page_dates.py` G, `location.py` H). To add a group: write its `add_columns` in a new module, call it in `pipeline.py`, list its columns in `columns.py`.
 - `talaria/silver_stage3/`: the Silver Stage 3 module (#35). Its public entry point is `build_silver_stage3(silver_facilities_df, references=None) -> stage3_df`, with the same no-reads, no-writes rule; `load_references()` reads the reference CSVs, and is the default.
   - `reference/`: the six reference CSVs (specialty code → category, text keywords per category, related categories, procedure/equipment rules, capability units, high-risk categories), the only source of Stage 3's mappings and patterns ([ADR 0003](docs/adr/0003-stage3-reference-csvs.md)). Edit a pattern there, not in code.
-  - `columns.py`: the two Stage 2 flags Stage 3 replaces and drops, and the new columns (name, step, type).
+  - `columns.py`: the two Stage 2 flags Stage 3 replaces and drops, and the new columns (name, step, type). The last, `evidence_items`, cites the facility text behind every true C2-C5 flag (`{rule, field, item, subject}`, item verbatim), so Gold can quote it.
   - `checks.py`: `check_silver_stage3(silver_facilities_df, stage3_df)`, the runtime checks the notebook runs on live data.
   - `rule_counts.py`: `rule_counts`, the rule log, and `replaced_flag_crosstabs`.
 - `talaria/gold/`: the Gold module. Its one public entry point is `build_gold(silver_stage3_df) -> (gold_facilities_df, gold_facility_items_df)`, with the same no-reads, no-writes rule.
