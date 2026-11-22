@@ -14,6 +14,7 @@ replay and the round slider show exactly what the live search showed.
 
 import math
 
+import h3
 import pydeck as pdk
 
 GREEN, ORANGE, BLUE = [0, 140, 70], [235, 135, 0], [30, 90, 220]
@@ -21,9 +22,10 @@ CHECKING = [90, 90, 90]
 RULED_OUT = [160, 160, 160, 110]
 NEWEST_BAND = [235, 135, 0, 95]
 EARLIER_BAND = [30, 90, 220, 28]
+DESERT_BAND = [210, 40, 40, 70]  # the area within the desert threshold, when it had no match (#46)
 LEGEND = (
     "🟢 Says it offers this (ringed) · 🟠 Related mention · ⚫ Being checked · ⚪ Ruled out · 🔵 You · "
-    "hexagons: area searched, newest ring orange"
+    "hexagons: area searched, newest ring orange, red where a possible healthcare desert was found"
 )
 STEP_SECONDS = 0.5  # pause per replayed step
 
@@ -36,6 +38,7 @@ class SearchView:
         self.direct_so_far = 0
         self.final_radius_km = final_radius_km
         self.top: list[dict] = []
+        self.desert_cells: set[str] = set()
 
     # --- events -------------------------------------------------------
 
@@ -57,9 +60,11 @@ class SearchView:
             self.direct_so_far = event["direct_so_far"]
         self.stage = kind
 
-    def finish(self, top: list[dict]) -> None:
-        """The final view: the top results numbered."""
+    def finish(self, top: list[dict], desert: dict | None = None) -> None:
+        """The final view: the top results numbered, and the desert area tinted red when there is one."""
         self.top = top
+        if desert and desert["is_desert"]:
+            self.desert_cells = set(h3.grid_disk(desert["start_cell"], desert["threshold_k"]))
         self.stage = "done"
 
     # --- drawing --------------------------------------------------------
@@ -87,7 +92,7 @@ class SearchView:
         last = len(self.rounds) - 1
         for i, r in enumerate(self.rounds):
             colour = NEWEST_BAND if i == last and self.stage in ("band", "found") else EARLIER_BAND
-            cells += [{"cell": c, "color": colour} for c in r["cells"]]
+            cells += [{"cell": c, "color": DESERT_BAND if c in self.desert_cells else colour} for c in r["cells"]]
             for p in r["points"].values():
                 if not p["checked"]:
                     dots.append({**p, "color": CHECKING, "radius": 5})
@@ -146,7 +151,7 @@ def view_after_round(answer: dict, i: int) -> SearchView:
             break
         view.apply(event)
     if i == len(answer["rounds"]) - 1:
-        view.finish(answer["top"])
+        view.finish(answer["top"], answer.get("desert"))
     return view
 
 

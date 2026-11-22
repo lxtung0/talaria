@@ -112,3 +112,18 @@ def test_the_map_is_reset_for_an_ambiguous_location(run_app):
 
     assert "Round 1" not in _texts(at) and "Done after" not in _texts(at)
     assert at.radio[0].label == "Did you mean…"
+
+
+def test_a_far_match_shows_the_healthcare_desert_alert(run_app):
+    (lat, lon), = ring_points(9, 1)
+    at = run_app(FakeBackend([facility_at(lat, lon, "far")], {"far": ("equipment", "Dialysis unit", 0.95)}), "dialysis", "Patna")
+
+    assert any(e.value.startswith("Possible healthcare desert") for e in at.error)
+    assert "Confirm locally before acting" in _texts(at)
+
+
+def test_a_near_match_shows_no_desert_alert(run_app):
+    (lat, lon), = ring_points(1, 1)
+    at = run_app(FakeBackend([facility_at(lat, lon, "f")], {"f": ("equipment", "Dialysis unit", 0.95)}), "dialysis", "Patna")
+
+    assert not any("healthcare desert" in e.value for e in at.error)

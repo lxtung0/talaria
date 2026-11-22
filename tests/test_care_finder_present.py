@@ -92,3 +92,27 @@ def test_formula_uses_the_urgency_distance_scale():
 def test_call_line_needs_a_phone():
     assert present.call_line(result()) == "Call to confirm: +919876543210"
     assert present.call_line(result(official_phone=None)) is None
+
+
+def _desert(**extra):
+    return {"is_desert": True, "threshold_k": 6, "threshold_km": 112.3, "rings_needed": 8, "nearest_direct_km": 141.6, "start_cell": "x", **extra}
+
+
+def test_no_desert_alert_when_the_service_is_close_enough():
+    assert present.desert_alert({**answer([result()]), "desert": _desert(is_desert=False)}) is None
+    assert present.desert_alert(answer([result()])) is None  # an answer from before #46
+
+
+def test_desert_alert_names_the_threshold_and_the_nearest_match():
+    text = present.desert_alert({**answer([result()]), "desert": _desert()})
+
+    assert text == (
+        "Possible healthcare desert: no facility says it offers dialysis within 6 map rings (about 112 km) "
+        "of Patna, Bihar, the limit for planned care. The nearest that does is 142 km away, 8 rings out."
+    )
+
+
+def test_desert_alert_when_nothing_was_found():
+    text = present.desert_alert({**answer([], radius=250.0, stop="max radius reached"), "desert": _desert(rings_needed=None, nearest_direct_km=None)})
+
+    assert text.endswith("None was found within about 250 km.")

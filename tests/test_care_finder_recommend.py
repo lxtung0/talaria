@@ -315,3 +315,51 @@ def test_a_broken_progress_callback_does_not_break_the_search():
     result = recommend("dialysis", "Patna", backend=backend, on_progress=broken)
 
     assert result["status"] == "ok" and [r["unique_id"] for r in result["top"]] == ["f"]
+
+
+# --- healthcare desert (#46) ------------------------------------------------------
+
+
+def test_a_direct_match_within_the_threshold_is_not_a_desert():
+    (lat, lon), = ring_points(6, 1)
+    backend = FakeBackend([facility_at(lat, lon, "f")], {"f": ("equipment", "Dialysis unit", 0.95)})
+
+    desert = recommend("dialysis", "Patna", "planned", backend=backend)["desert"]
+
+    assert desert["is_desert"] is False
+    assert desert["rings_needed"] == 6 and desert["threshold_k"] == 6
+    assert desert["nearest_direct_km"] > 50
+
+
+def test_needing_more_rings_than_the_threshold_is_a_desert():
+    (lat, lon), = ring_points(7, 1)
+    backend = FakeBackend([facility_at(lat, lon, "f")], {"f": ("equipment", "Dialysis unit", 0.95)})
+
+    desert = recommend("dialysis", "Patna", "planned", backend=backend)["desert"]
+
+    # Ring 7 is searched in the k=8 band; rings needed is the true grid distance, not the band.
+    assert desert["is_desert"] is True and desert["rings_needed"] == 7
+
+
+def test_the_threshold_depends_on_urgency():
+    (lat, lon), = ring_points(3, 1)
+    backend = FakeBackend([facility_at(lat, lon, "f")], {"f": ("equipment", "Dialysis unit", 0.95)})
+
+    assert recommend("dialysis", "Patna", "emergency", backend=backend)["desert"]["is_desert"] is True
+    assert recommend("dialysis", "Patna", "planned", backend=backend)["desert"]["is_desert"] is False
+
+
+def test_only_direct_matches_count_against_a_desert():
+    (near_lat, near_lon), = ring_points(1, 1)
+    backend = FakeBackend([facility_at(near_lat, near_lon, "near")], {"near": ("specialty", "nephrology", 0.95)}, llm_labels={"near-e0": "related"})
+
+    result = recommend("dialysis", "Patna", backend=backend)
+
+    assert [r["unique_id"] for r in result["top"]] == ["near"]
+    assert result["desert"] == {**result["desert"], "is_desert": True, "rings_needed": None, "nearest_direct_km": None}
+
+
+def test_nothing_found_out_to_max_k_is_a_desert():
+    desert = recommend("dialysis", "Patna", backend=FakeBackend([], {}))["desert"]
+
+    assert desert["is_desert"] is True and desert["rings_needed"] is None
