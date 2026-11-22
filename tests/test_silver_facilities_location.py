@@ -102,20 +102,30 @@ def test_far_with_no_same_prefix_pin_nearby(run):
     assert flags["kochi"] == (True, True, False)
 
 
-def test_far_uses_the_pin_radius_when_it_exceeds_10_km(run, make_silver_inputs, make_pincodes):
-    # A PIN whose offices sit about 33 km either side of its centroid: its radius,
-    # not the 10 km floor, decides what counts as far.
-    wide = make_pincodes(
+def test_a_directory_office_with_bad_coordinates_does_not_hide_a_far_facility(make_silver_inputs, make_pincodes):
+    # PIN 500001's offices are in Hyderabad, plus one with coordinates about 1,000 km
+    # off. The median keeps the centroid in Hyderabad, and the fixed 10 km threshold
+    # isn't widened by that office, so a facility 16 km away is still far.
+    noisy = make_pincodes(
         (500001, "HYDERABAD", "TELANGANA", *HYDERABAD),
-        (500001, "HYDERABAD", "TELANGANA", 17.6850, 78.4867),  # about 33 km north
-        (500001, "HYDERABAD", "TELANGANA", 17.0850, 78.4867),  # about 33 km south
+        (500001, "HYDERABAD", "TELANGANA", 17.3900, 78.4900),
+        (500001, "HYDERABAD", "TELANGANA", 26.8467, 80.9462),  # wrong: Lucknow
         (682001, "KOCHI", "KERALA", *KOCHI),
     )
-    bronze, silver_base = make_silver_inputs(pin_mismatch("wide", GACHIBOWLI), pincodes=wide)
+    bronze, silver_base = make_silver_inputs(pin_mismatch("noisy", GACHIBOWLI), pincodes=noisy)
 
-    facilities = build_silver_facilities(silver_base, bronze, wide, RUN_DATE)
+    facilities = build_silver_facilities(silver_base, bronze, noisy, RUN_DATE)
 
-    # About 16 km from the centroid, inside the PIN's 33 km radius.
+    assert facilities.first().flag_coords_far_from_written_pin is True
+
+
+def test_far_means_more_than_10_km_from_the_pin(make_silver_inputs, make_pincodes):
+    # About 6 km from PIN 500001's centroid: not far, whatever the PIN's size.
+    directory = make_pincodes((500001, "HYDERABAD", "TELANGANA", *HYDERABAD), (682001, "KOCHI", "KERALA", *KOCHI))
+    bronze, silver_base = make_silver_inputs(pin_mismatch("six-km", SECUNDERABAD), pincodes=directory)
+
+    facilities = build_silver_facilities(silver_base, bronze, directory, RUN_DATE)
+
     assert facilities.first().flag_coords_far_from_written_pin is False
 
 
