@@ -112,14 +112,27 @@ PINCODES_SCHEMA = T.StructType(
 def make_pincodes(spark):
     """Build a fake bronze pincode directory from `(pincode, district, statename)` post offices.
 
+    An office may add `latitude, longitude` (stored as text, like the source, so
+    `"NA"` works too); without them both are NULL.
+
         pincodes = make_pincodes((500001, "HYDERABAD", "TELANGANA"))
+        pincodes = make_pincodes((500001, "HYDERABAD", "TELANGANA", 17.385, 78.4867))
     """
 
     def build(*offices):
-        records = [
-            {"pincode": pincode, "district": district, "statename": state, "officename": f"Office {i}"}
-            for i, (pincode, district, state) in enumerate(offices)
-        ]
+        records = []
+        for i, (pincode, district, state, *coordinates) in enumerate(offices):
+            latitude, longitude = coordinates or (None, None)
+            records.append(
+                {
+                    "pincode": pincode,
+                    "district": district,
+                    "statename": state,
+                    "officename": f"Office {i}",
+                    "latitude": None if latitude is None else str(latitude),
+                    "longitude": None if longitude is None else str(longitude),
+                }
+            )
         return spark.createDataFrame(
             [tuple(r.get(name) for name in PINCODES_SCHEMA.fieldNames()) for r in records], PINCODES_SCHEMA
         )

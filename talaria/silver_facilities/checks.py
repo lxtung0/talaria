@@ -7,7 +7,7 @@ from pyspark.sql import Column, DataFrame
 from pyspark.sql import functions as F
 
 from talaria.silver_base.checks import unique_id_counts, unique_id_failures
-from talaria.silver_facilities import columns
+from talaria.silver_facilities import columns, location
 
 
 def check_silver_facilities(silver_base: DataFrame, facilities: DataFrame) -> None:
@@ -18,6 +18,7 @@ def check_silver_facilities(silver_base: DataFrame, facilities: DataFrame) -> No
     - Every Silver base value is unchanged.
     - No flag is NULL.
     - `primary_affiliation` is NULL exactly when `affiliation_types` is NULL.
+    - Group H (location) flags are false for every Facility without a Silver base location flag.
     """
     failures = _schema_failures(silver_base, facilities)
     if failures:
@@ -29,6 +30,7 @@ def check_silver_facilities(silver_base: DataFrame, facilities: DataFrame) -> No
         *unique_id_counts(),
         *[F.count(F.when(F.col(name).isNull(), 1)).alias(f"null:{name}") for name in flags],
         *_primary_affiliation_counts(),
+        *[F.count(F.when(F.col(name) & ~_has_location_flag(), 1)).alias(f"out_of_scope:{name}") for name in location.FLAGS],
     ).first()
 
     failures = unique_id_failures(counts)
@@ -39,9 +41,19 @@ def check_silver_facilities(silver_base: DataFrame, facilities: DataFrame) -> No
         if counts[f"null:{name}"]:
             failures.append(f"{name}: {counts[f'null:{name}']} row(s) with a NULL flag")
     failures += _primary_affiliation_failures(counts)
+    for name in location.FLAGS:
+        if counts[f"out_of_scope:{name}"]:
+            failures.append(f"{name}: true for {counts[f'out_of_scope:{name}']} row(s) without a Silver base location flag")
     failures += _changed_value_failures(silver_base, facilities)
     if failures:
         _fail(failures)
+
+
+def _has_location_flag() -> Column:
+    has_flag = F.lit(False)
+    for name in location.SILVER_BASE_LOCATION_FLAGS:
+        has_flag = has_flag | F.col(name)
+    return has_flag
 
 
 def _fail(failures: list[str]) -> None:
