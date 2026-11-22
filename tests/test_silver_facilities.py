@@ -43,6 +43,9 @@ def test_adds_only_the_flag_columns(make_silver_inputs, no_pincodes):
     assert facilities.dtypes[len(silver_base.columns) :] == [
         ("flag_page_update_unparsable", "boolean"),
         ("flag_future_page_update", "boolean"),
+        ("flag_coords_far_from_written_pin", "boolean"),
+        ("flag_no_same_prefix_pin_nearby", "boolean"),
+        ("flag_coords_shared", "boolean"),
     ]
 
 

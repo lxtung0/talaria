@@ -23,6 +23,10 @@ NEW_COLUMNS = [
     # G. Page update date.
     NewColumn("flag_page_update_unparsable", "G"),
     NewColumn("flag_future_page_update", "G"),
+    # H. Location: only Facilities with a Silver base location flag are checked.
+    NewColumn("flag_coords_far_from_written_pin", "H"),
+    NewColumn("flag_no_same_prefix_pin_nearby", "H"),
+    NewColumn("flag_coords_shared", "H"),
 ]
 
 
