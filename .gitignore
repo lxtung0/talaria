@@ -18,3 +18,4 @@ __pycache__/
 .venv/
 .databricks/
 .DS_Store
+build/

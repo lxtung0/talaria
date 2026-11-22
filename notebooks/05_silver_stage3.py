@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 04 · Silver Stage 3
+# MAGIC # 05 · Silver Stage 3
 # MAGIC Builds Silver Stage 3 (#35): Silver facilities plus capacity outlier (R0), name vs type (F1), large hospital (R1-R5)
 # MAGIC and consistency (C1-C5) flags. Two Stage 2 flags it replaces are dropped. Values are never changed and nothing is scored.
 # MAGIC The mappings and patterns come from the reference CSVs in `talaria/silver_stage3/reference/`.

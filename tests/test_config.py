@@ -14,3 +14,9 @@ def test_silver_stage3_has_its_own_table_names():
         "facilities": "workspace.talaria.silver_facilities_stage3",
         "rule_counts": "workspace.talaria.silver_stage3_rule_counts",
     }
+
+
+def test_app_tables_are_all_app_prefixed():
+    from config import APP, APP_VS_INDEX
+
+    assert all(name.startswith("workspace.talaria.app_") for name in [*APP.values(), APP_VS_INDEX])

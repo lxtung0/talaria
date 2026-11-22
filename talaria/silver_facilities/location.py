@@ -5,7 +5,7 @@ for every other Facility. Each flag names a problem, so false never confirms a
 location. There is no "near the PIN" flag: ADR 0001 notes that coordinates
 appear geocoded from the PIN, so being near proves nothing.
 
-Distances, centroids and radii are working columns only and never leave the function.
+Distances and centroids are working columns only and never leave the function.
 """
 
 from pyspark.sql import Column, DataFrame
@@ -15,8 +15,11 @@ from talaria.silver_base.state_check import FLAGS as SILVER_BASE_LOCATION_FLAGS
 
 FLAGS = ["flag_coords_far_from_written_pin", "flag_no_same_prefix_pin_nearby", "flag_coords_shared"]
 
-# A Facility farther than max(_FAR_FLOOR_KM, the PIN's radius) from its PIN's centroid is far.
-_FAR_FLOOR_KM = 10.0
+# A Facility farther than this from its written PIN's centroid is far. A fixed
+# distance, not the PIN's radius: the directory has offices with coordinates
+# hundreds of km off, and one of them inflated the radius enough to hide far
+# Facilities (7 of 31 on the 2026-11-22 data).
+_FAR_KM = 10.0
 # A same-prefix PIN counts as nearby within this distance.
 _NEARBY_KM = 5.0
 # Directory offices outside India's bounding box are skipped.
@@ -45,7 +48,7 @@ def add_columns(df: DataFrame, pincodes: DataFrame) -> DataFrame:
         scoped.join(F.broadcast(pins), F.col("_h_pin") == F.col("_p_pin"))
         .where(
             _haversine_km(F.col("_h_lat"), F.col("_h_lon"), F.col("_p_lat"), F.col("_p_lon"))
-            > F.greatest(F.lit(_FAR_FLOOR_KM), F.col("_p_radius_km"))
+            > _FAR_KM
         )
         .select(F.col("_h_id").alias("_far_id"))
     )
@@ -92,7 +95,10 @@ def add_columns(df: DataFrame, pincodes: DataFrame) -> DataFrame:
 
 
 def _pin_centroids(pincodes: DataFrame) -> DataFrame:
-    """One row per PIN: median office latitude and longitude, and the largest office distance from them.
+    """One row per PIN: the median latitude and longitude of its offices.
+
+    The median, not the mean, so a minority of offices with wrong coordinates
+    can't drag the centroid.
 
     Coordinates are text in the source, with `NA` among them: `try_cast` skips
     those instead of raising under ANSI mode.
@@ -103,14 +109,9 @@ def _pin_centroids(pincodes: DataFrame) -> DataFrame:
         F.expr("try_cast(longitude AS double)").alias("_o_lon"),
     ).where(F.col("_o_lat").between(*_INDIA_LAT) & F.col("_o_lon").between(*_INDIA_LON))
 
-    centroids = offices.groupBy("_p_pin").agg(
+    return offices.groupBy("_p_pin").agg(
         F.expr("percentile(_o_lat, 0.5)").alias("_p_lat"),
         F.expr("percentile(_o_lon, 0.5)").alias("_p_lon"),
-    )
-    return (
-        offices.join(centroids, "_p_pin")
-        .groupBy("_p_pin", "_p_lat", "_p_lon")
-        .agg(F.max(_haversine_km(F.col("_o_lat"), F.col("_o_lon"), F.col("_p_lat"), F.col("_p_lon"))).alias("_p_radius_km"))
     )
 
 

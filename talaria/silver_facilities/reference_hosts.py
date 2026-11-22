@@ -77,3 +77,15 @@ SOCIAL_HOSTS = [
     "x.com",
     "youtube.com",
 ]
+
+# Hosts many unrelated pages share (map links, link shorteners). A match on one
+# proves nothing about the facility's own site. A facility's own subdomain on a
+# site builder (`xyz.wixsite.com`, `xyz.blogspot.com`) is its own site and is not here.
+SHARED_PLATFORM_HOSTS = [
+    "bit.ly",
+    "g.page",
+    "goo.gl",
+    "google.com",
+    "linktr.ee",
+    "wa.me",
+]

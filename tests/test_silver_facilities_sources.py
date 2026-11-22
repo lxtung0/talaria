@@ -64,6 +64,28 @@ def test_own_site_among_sources_matches_on_host(flags):
     assert result["no-website"]["flag_own_site_in_sources"] is False
 
 
+@pytest.mark.parametrize(
+    "website, source",
+    [
+        ("facebook.com/cityhospital", "https://www.facebook.com/cityhospital"),
+        ("m.facebook.com/cityhospital", "https://facebook.com/cityhospital"),
+        ("practo.com/delhi/hospital/city-hospital", "https://www.practo.com/delhi/hospital/city-hospital"),
+        ("justdial.com/Delhi/City-Hospital", "https://justdial.com/Delhi/City-Hospital"),
+        ("google.com/maps/place/City+Hospital", "https://www.google.com/maps/place/City+Hospital"),
+    ],
+)
+def test_a_directory_social_or_shared_page_is_not_an_own_site(flags, website, source):
+    result = flags(sources("listing", source, "https://cityhospital.in/about", website=website))
+
+    assert result["listing"]["flag_own_site_in_sources"] is False
+
+
+def test_an_own_subdomain_on_a_site_builder_is_an_own_site(flags):
+    result = flags(sources("builder", "https://cityhospital.wixsite.com/home", website="cityhospital.wixsite.com/home"))
+
+    assert result["builder"]["flag_own_site_in_sources"] is True
+
+
 def test_only_directory_and_social_sources(flags):
     result = flags(
         sources("listings", "https://www.practo.com/x", "https://m.facebook.com/y", "https://in.linkedin.com/company/z"),
