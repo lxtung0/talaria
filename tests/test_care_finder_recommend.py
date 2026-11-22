@@ -282,3 +282,36 @@ def test_a_repeat_makes_no_llm_call_even_when_more_hits_than_are_sent_were_found
     recommend("dialysis", "Patna", backend=backend)
 
     assert backend.chat_calls == calls
+
+
+def test_progress_events_show_each_round_being_searched_found_and_checked():
+    (near_lat, near_lon), = ring_points(1, 1)
+    (far_lat, far_lon), = ring_points(3, 1)
+    backend = FakeBackend(
+        [facility_at(near_lat, near_lon, "near"), facility_at(far_lat, far_lon, "far")],
+        {"near": ("equipment", "CT scanner", 0.85), "far": ("capability", "Dialysis", 0.95)},
+        llm_labels={"near-e0": "unrelated"},
+    )
+    events = []
+
+    recommend("dialysis", "Patna", backend=backend, on_progress=events.append)
+
+    assert events[0]["type"] == "located" and events[0]["label"] == "Patna, Bihar"
+    assert [e["type"] for e in events[1:4]] == ["band", "found", "checked"]
+    assert [c["unique_id"] for c in events[2]["candidates"]] == ["near"]
+    assert events[3]["labels"] == {"near": None}  # ruled out
+    round3 = [e for e in events if e.get("round") == 3]
+    assert round3[2]["labels"] == {"far": "direct"} and round3[2]["direct_so_far"] == 1
+    assert sum(1 for e in events if e["type"] == "band") == 10
+
+
+def test_a_broken_progress_callback_does_not_break_the_search():
+    (lat, lon), = ring_points(1, 1)
+    backend = FakeBackend([facility_at(lat, lon, "f")], {"f": ("equipment", "Dialysis unit", 0.95)})
+
+    def broken(event):
+        raise RuntimeError("chart failed")
+
+    result = recommend("dialysis", "Patna", backend=backend, on_progress=broken)
+
+    assert result["status"] == "ok" and [r["unique_id"] for r in result["top"]] == ["f"]

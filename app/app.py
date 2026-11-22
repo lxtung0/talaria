@@ -1,7 +1,11 @@
-"""Care finder: a Streamlit Databricks App on top of `recommend()` (ticket #29).
+"""Care finder: a Streamlit Databricks App on top of `recommend()` (tickets #29, #33).
 
 Local run, from the repo root:  uv run streamlit run app/app.py
 Every line on a card comes from `talaria.care_finder.present` templates.
+
+Layout: search and results on the left, the live search map on the right. On a
+wide screen the map column stays pinned while the results scroll; on a phone the
+two columns stack.
 """
 
 import os
@@ -18,11 +22,21 @@ import pandas as pd
 import streamlit as st
 
 from talaria.care_finder import present
+from talaria.care_finder import search_map as sm
 from talaria.care_finder.recommend import recommend
 
 EXAMPLES = ["Dialysis", "Emergency C-section", "NICU", "MRI", "Cardiac surgery", "Burn care"]
+MAP_HEIGHT = 520
 
-st.set_page_config(page_title="Find care nearby", page_icon="🏥", layout="centered")
+st.set_page_config(page_title="Find care nearby", page_icon="🏥", layout="wide")
+# Pin the map column while the results scroll, on screens wide enough for two columns.
+st.html(
+    """<style>
+    @media (min-width: 900px) {
+      div[data-testid="stColumn"]:has(.st-key-map_panel) { position: sticky; top: 3.5rem; align-self: flex-start; }
+    }
+    </style>"""
+)
 
 
 @st.cache_resource
@@ -32,11 +46,11 @@ def backend():
     return DatabricksBackend()
 
 
-def answer_for(query: tuple) -> dict:
+def answer_for(query: tuple, on_progress=None) -> dict:
     """The answer for this query, computed once per search, then kept in the
     session while the user expands sections."""
     if st.session_state.get("answer_query") != query:
-        st.session_state.answer = recommend(*query, backend=backend())
+        st.session_state.answer = recommend(*query, backend=backend(), on_progress=on_progress)
         st.session_state.answer_query = query
     return st.session_state.answer
 
@@ -51,52 +65,81 @@ def run_search(service: str, location: str, urgency: str) -> None:
     st.session_state.pop("answer_query", None)  # pressing Search always searches again
 
 
-# --- Search form -------------------------------------------------------------
+left, right = st.columns([11, 9], gap="large")
 
-st.title("Find care nearby")
-st.caption("Enter a service and a place. We look for facilities whose own records say they offer it, nearest first.")
+# --- Right: the search map ---------------------------------------------------------
 
-example = st.pills("Examples", EXAMPLES, key="example", label_visibility="collapsed")
-if example and st.session_state.get("last_example") != example:
-    st.session_state.service = example
-    st.session_state.last_example = example
+with right:
+    with st.container(key="map_panel"):
+        st.markdown("**Watch the search**")
+        chart, status = st.empty(), st.empty()
+        st.caption(sm.LEGEND)
+        controls = st.container()
 
-with st.form("search"):
-    service = st.text_input("Service", key="service", placeholder="e.g. dialysis, MRI, NICU")
-    location = st.text_input("Location", key="location", placeholder="PIN, city, district or lat,lon (e.g. 800001)")
-    urgency = st.segmented_control("Urgency", ["Planned", "Emergency"], default="Planned", key="urgency")
-    if st.form_submit_button("Search", type="primary", width="stretch"):
-        run_search(service, location, (urgency or "Planned").lower())
+# --- Left: the search form -----------------------------------------------------------
+
+with left:
+    st.title("Find care nearby")
+    st.caption("Enter a service and a place. We look for facilities whose own records say they offer it, nearest first.")
+
+    example = st.pills("Examples", EXAMPLES, key="example", label_visibility="collapsed")
+    if example and st.session_state.get("last_example") != example:
+        st.session_state.service = example
+        st.session_state.last_example = example
+
+    with st.form("search"):
+        service = st.text_input("Service", key="service", placeholder="e.g. dialysis, MRI, NICU")
+        location = st.text_input("Location", key="location", placeholder="PIN, city, district or lat,lon (e.g. 800001)")
+        urgency = st.segmented_control("Urgency", ["Planned", "Emergency"], default="Planned", key="urgency")
+        if st.form_submit_button("Search", type="primary", width="stretch"):
+            run_search(service, location, (urgency or "Planned").lower())
 
 if "query" not in st.session_state:
+    chart.pydeck_chart(sm.SearchView().deck(), height=MAP_HEIGHT)
+    status.caption("Run a search to watch it here: each ring of the map lights up as it is searched.")
     st.stop()
 
 service, location, urgency = st.session_state.query
-with st.spinner(f"Searching for {service} near {location}…"):
-    answer = answer_for((service, location, urgency))
+query = (service, location, urgency)
 
-# --- Error and ambiguous states -----------------------------------------------
+# --- The search, drawn live on the right as it runs ----------------------------------
 
-if answer["status"] == "error":
-    st.error(answer["error"])
-    st.stop()
+if st.session_state.get("answer_query") != query:
+    view = sm.SearchView()
+    status.caption(f"Finding {location}…")
 
-if answer["status"] == "ambiguous":
-    st.warning(f'"{location}" matches more than one place.')
-    choice = st.radio("Did you mean…", answer["candidates"], index=None)
-    if choice and st.button("Search there", type="primary"):
-        st.session_state.query = (service, choice, urgency)
-        st.rerun()
-    st.stop()
+    def draw(event: dict) -> None:
+        view.apply(event)
+        chart.pydeck_chart(view.deck(), height=MAP_HEIGHT)
+        status.caption(view.caption())
+        if event["type"] in ("band", "checked"):
+            time.sleep(sm.STEP_SECONDS)  # long enough to see each step
 
-# --- Results ----------------------------------------------------------------------
+    answer = answer_for(query, on_progress=draw)
+    st.session_state.round_slider = len(answer.get("rounds") or [None])
+else:
+    answer = answer_for(query)
 
-if not answer["evidence_checked"]:
-    st.warning(present.NOT_CHECKED, icon="⚠️")
+if answer["status"] != "ok":
+    chart.pydeck_chart(sm.SearchView().deck(), height=MAP_HEIGHT)
+    status.caption("")
 
-top, others = answer["top"], answer["others"]
-(st.info if top and top[0]["evidence_band"] == "strong" else st.warning)(present.summary(answer))
-st.caption(present.search_extent(answer))
+# --- Left: error and ambiguous states -----------------------------------------------
+
+with left:
+    if answer["status"] == "error":
+        st.error(answer["error"])
+        st.stop()
+
+    if answer["status"] == "ambiguous":
+        st.warning(f'"{location}" matches more than one place.')
+        choice = st.radio("Did you mean…", answer["candidates"], index=None)
+        if choice and st.button("Search there", type="primary"):
+            st.session_state.query = (service, choice, urgency)
+            st.rerun()
+        st.stop()
+
+# --- Left: results ---------------------------------------------------------------------
 
 
 def card(result: dict, position: int) -> None:
@@ -132,58 +175,41 @@ def card(result: dict, position: int) -> None:
             st.json({k: answer["settings"][k] for k in ("min_direct_facilities", "max_k", "min_similarity", "type_weights", "label_values")}, expanded=False)
 
 
-for i, result in enumerate(top, 1):
-    card(result, i)
+top, others = answer["top"], answer["others"]
+with left:
+    if not answer["evidence_checked"]:
+        st.warning(present.NOT_CHECKED, icon="⚠️")
+    (st.info if top and top[0]["evidence_band"] == "strong" else st.warning)(present.summary(answer))
+    st.caption(present.search_extent(answer))
 
-# --- Map -------------------------------------------------------------------------
-# The map slot comes first on the page, but is filled last: the cards and the other
-# options show at once, then the search replays underneath the cards.
+    for i, result in enumerate(top, 1):
+        card(result, i)
 
-map_slot = st.container()
+    if others:
+        with st.expander("Other options we considered"):
+            for result in others:
+                st.markdown(f"- {md(present.other_line(result, top[-1] if top else None))}")
 
-if others:
-    with st.expander("Other options we considered"):
-        for result in others:
-            st.markdown(f"- {md(present.other_line(result, top[-1] if top else None))}")
+# --- Right: the map's final view, Replay and the round slider ------------------------
 
-
-def static_map() -> None:
-    points = [{"lat": answer["location"]["lat"], "lon": answer["location"]["lon"], "color": "#1e5adc", "size": 300}]
-    points += [{"lat": r["latitude"], "lon": r["longitude"], "color": "#008c46", "size": 200} for r in top]
-    points += [{"lat": r["latitude"], "lon": r["longitude"], "color": "#eb8700", "size": 120} for r in others]
-    st.map(pd.DataFrame(points), color="color", size="size")
-    st.caption("Blue: your location · Green: top results · Orange: other options")
-
-
-def search_map() -> None:
-    from talaria.care_finder import search_map as sm
-
-    rounds = answer["rounds"]
-    last = len(rounds) - 1
-    st.markdown("**How the search grew**")
-    chart, label = st.empty(), st.empty()
-    st.caption(sm.LEGEND)
+rounds = answer["rounds"]
+last = len(rounds) - 1
+with controls:
     replay_col, slider_col = st.columns([1, 3], vertical_alignment="bottom")
     replay = replay_col.button("Replay search", width="stretch")
-    query = st.session_state.query
-    if replay or st.session_state.get("animated_for") != query:
-        st.session_state.animated_for = query
-        for i in range(last + 1):
-            chart.pydeck_chart(sm.frame(answer, i), height=420)
-            label.caption(sm.caption(answer, i))
-            time.sleep(sm.FRAME_SECONDS)
-        st.session_state.round_slider = last + 1
-    if last == 0:
-        chosen = 1
-    else:
+    if last > 0:
         default = {} if "round_slider" in st.session_state else {"value": last + 1}
-        chosen = slider_col.slider("Round", 1, last + 1, key="round_slider", **default)
-    chart.pydeck_chart(sm.frame(answer, chosen - 1), height=420)
-    label.caption(sm.caption(answer, chosen - 1) + (f" · {sm.top_names(answer)}" if chosen - 1 == last and top else ""))
-
-
-with map_slot:
-    if answer.get("rounds"):
-        search_map()
-    else:  # an answer without rounds, e.g. from an older cache
-        static_map()
+        chosen = slider_col.slider("Round", 1, last + 1, key="round_slider", **default) - 1
+    else:
+        chosen = 0
+if replay:
+    view = sm.SearchView(rounds[-1]["radius_km"])
+    for event in sm.replay_events(answer):
+        view.apply(event)
+        chart.pydeck_chart(view.deck(), height=MAP_HEIGHT)
+        status.caption(view.caption())
+        time.sleep(sm.STEP_SECONDS)
+    chosen = last
+final = sm.view_after_round(answer, chosen)
+chart.pydeck_chart(final.deck(), height=MAP_HEIGHT)
+status.caption(final.caption())
