@@ -1,8 +1,13 @@
 """Unpack the source Facilities table into the two app tables (ticket #27).
 
-`build_app_tables(facilities) -> (app_facilities, app_facility_items)`: no reads,
-writes or Databricks-only calls, so it runs on local Spark. The notebook adds
-`h3_r5` afterwards, since H3 functions only exist on Databricks.
+`build_app_tables(facilities, gold=None) -> (app_facilities, app_facility_items)`:
+no reads, writes or Databricks-only calls, so it runs on local Spark. The notebook
+adds `h3_r5` afterwards, since H3 functions only exist on Databricks.
+
+`facilities` (Silver) supplies the claim lists and flags. `gold`, when given,
+supplies the confidence: only Facilities in Gold are kept (it leaves out
+veterinary ones), with its `confidence_score` and `confidence_reasons` log.
+Gold itself is too narrow to replace Silver here: it has no claim lists or flags.
 """
 
 from pyspark.sql import DataFrame
@@ -32,8 +37,11 @@ ITEM_TYPES = [item_type for _, item_type, _ in LIST_ITEMS] + [DESCRIPTION_TYPE]
 SENTENCE_BREAK = r"(?<=[.!?])\s+"
 
 
-def build_app_tables(facilities: DataFrame) -> tuple[DataFrame, DataFrame]:
+def build_app_tables(facilities: DataFrame, gold: DataFrame | None = None) -> tuple[DataFrame, DataFrame]:
     """`app_facilities` (one row per Facility) and `app_facility_items` (one row per claim)."""
+    if gold is not None:
+        scores = gold.select("unique_id", "confidence_score", "confidence_reasons")
+        facilities = facilities.drop("confidence_score", "confidence_reasons").join(scores, "unique_id")
     return _app_facilities(facilities), _app_facility_items(facilities)
 
 
@@ -44,7 +52,14 @@ def _app_facilities(facilities: DataFrame) -> DataFrame:
         if "confidence_score" in facilities.columns
         else F.lit(PLACEHOLDER_CONFIDENCE)
     )
-    return facilities.select(*SHOWN_COLUMNS, *flags, *QUALITY_COLUMNS, confidence.alias("confidence_score"))
+    reasons = (
+        F.col("confidence_reasons")
+        if "confidence_reasons" in facilities.columns
+        else F.lit(None).cast("array<string>")
+    )
+    return facilities.select(
+        *SHOWN_COLUMNS, *flags, *QUALITY_COLUMNS, confidence.alias("confidence_score"), reasons.alias("confidence_reasons")
+    )
 
 
 def _app_facility_items(facilities: DataFrame) -> DataFrame:

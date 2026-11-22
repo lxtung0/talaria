@@ -111,7 +111,7 @@ databricks apps stop talaria-care-finder
 databricks apps start talaria-care-finder   # then open the URL from: databricks apps get talaria-care-finder
 ```
 
-**Switch the source table to Gold:** set `APP_SOURCE_FACILITIES` in `config.py` to the Gold table (it should have a `confidence_score` column; without one the app uses 0.5), re-run `03_app_tables`, then redeploy.
+**Gold:** `03_app_tables` takes each Facility's `confidence_score` and `confidence_reasons` from `gold_facilities` (`APP_CONFIDENCE_SOURCE` in `config.py`) and keeps only the Facilities Gold covers. The claim lists and flags still come from Silver facilities, because Gold doesn't carry them. Without a Gold table it falls back to 0.5. After re-running `06_gold`, re-run `03_app_tables` and redeploy.
 
 **Tuning:** every scoring number and search setting is in `talaria/care_finder/settings.py`.
 

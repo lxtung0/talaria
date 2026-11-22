@@ -185,6 +185,7 @@ def build_result(facility: dict, hits: list[dict], place: Place, urgency: str, s
         "evidence_band": scoring.evidence_band(evidence, settings),
         "confidence_score": confidence,
         "confidence_band": scoring.confidence_band(confidence, settings),
+        "confidence_reasons": facility.get("confidence_reasons") or [],
         "distance_factor": round(scoring.distance_decay(distance, urgency, settings), 3),
         "rank": round(scoring.rank_score(evidence, confidence, distance, urgency, settings), 4),
         "evidence": [
