@@ -22,21 +22,95 @@ AFFILIATION_TYPE = {
     "private-entity": "private",
 }
 
-# Specialty spelling (`specialties` items): British word fragment -> American,
-# replaced wherever it occurs inside an item. Written lower-case; the fix also
-# matches the fragment Capitalized (camelCase or Title Case) and in UPPER CASE
-# and keeps that shape (`paediatricCardiology`, `clinicalHaematology`, `PAEDIATRICS`).
-# `paed` also covers `orthopaed`; `aemia` covers `anaemia`, `leukaemia`, `septicaemia`.
-SPECIALTY_SPELLING = {
+# British spelling (items of `specialties`, `procedure`, `equipment`, `capability`):
+# British word fragment -> American, replaced wherever it occurs inside an item,
+# in table order. Written lower-case; the fix also matches the fragment
+# Capitalized (camelCase or Title Case) and in UPPER CASE and keeps that shape
+# (`paediatricCardiology`, `clinicalHaematology`, `PAEDIATRICS`).
+#
+# Every fragment was checked against every word in those four columns (profiled
+# 2026-11-21) and hits no correct American word. So generic endings are not
+# fragments: `-ise`/`-ised`/`-ising` (correct in `advised`, `exercise`, `arising`)
+# are fixed only for the stems in `_ISE_STEMS` and `_ISING_STEMS`, and `analyse` is not fixed
+# (`analyses` is the American plural). Deliberately not fixed: `harbour` (the
+# place Diamond Harbour), `titre` (the Sensititre brand), `tyre` (inside
+# `...fertilityresearchcentre`), `programme` (inside `programmer`), `cancell`
+# (`cancellation`), `storey` (`storeyed`, `storeys`), `grey`, and `disc`.
+# Stems whose British -ise forms (-ise, -ised, -ises, -iser) occur in the data;
+# `vapor` catches `vapouriser` after the -our fix. `_ISING_STEMS` likewise for -ising.
+_ISE_STEMS = [
+    "special", "personal", "central", "marginal", "operational", "local", "digital",
+    "revital", "commercial", "util", "steril", "nebul", "computer", "recogn", "custom",
+    "random", "subsid", "standard", "modern", "organ", "mechan", "synerg", "popular",
+    "vascular", "author", "motor", "vapor", "digit", "sanit", "priorit", "immun",
+]
+_ISING_STEMS = ["special", "character", "organ", "priorit", "necrot", "lutein", "optim", "revolution"]
+
+BRITISH_SPELLING = {
+    # ae / oe. `paed` also covers `orthopaed`; `aemia` covers `anaemia`, `leukaemia`.
     "paed": "ped",
     "haem": "hem",
-    "gynaec": "gynec",
+    "gynae": "gyne",
     "anaesthe": "anesthe",
-    "oesophag": "esophag",
-    "oedema": "edema",
+    "caesar": "cesar",
+    "caec": "cec",
     "aemia": "emia",
     "ischaem": "ischem",
+    "faec": "fec",
+    "oesophag": "esophag",
+    "oedema": "edema",
     "foet": "fet",
+    "homoeo": "homeo",
+    "rrhoea": "rrhea",
+    "pnoea": "pnea",
+    "coeliac": "celiac",
+    "manoeuvre": "maneuver",
+    "leuco": "leuko",
+    # -re. `centred` before `centre`.
+    "centred": "centered",
+    "centre": "center",
+    "theatre": "theater",
+    "fibre": "fiber",
+    "litre": "liter",
+    "metre": "meter",
+    "goitre": "goiter",
+    "calibre": "caliber",
+    # -our. Before the -ise stems, so `vapouriser` -> `vaporiser` -> `vaporizer`.
+    "tumour": "tumor",
+    "labour": "labor",
+    "colour": "color",
+    "behaviour": "behavior",
+    "neighbour": "neighbor",
+    "honour": "honor",
+    "favour": "favor",
+    "endeavour": "endeavor",
+    "vapour": "vapor",
+    # -ise / -isation / -yse.
+    "isation": "ization",
+    **{f"{stem}ise": f"{stem}ize" for stem in _ISE_STEMS},
+    **{f"{stem}ising": f"{stem}izing" for stem in _ISING_STEMS},
+    "practis": "practic",
+    "lyser": "lyzer",
+    # Doubled l.
+    "counsell": "counsel",
+    "travell": "travel",
+    "labell": "label",
+    "modell": "model",
+    "panelled": "paneled",
+    "enrolment": "enrollment",
+    "fulfilment": "fulfillment",
+    # Other words. `jewellery` before `jeweller`.
+    "speciality": "specialty",
+    "licence": "license",
+    "defence": "defense",
+    "ageing": "aging",
+    "mould": "mold",
+    "aluminium": "aluminum",
+    "sulph": "sulf",
+    "jewellery": "jewelry",
+    "jeweller": "jeweler",
+    "cheque": "check",
+    "analogue": "analog",
 }
 
 # City (`address_city`): officially renamed cities, old name -> current name.

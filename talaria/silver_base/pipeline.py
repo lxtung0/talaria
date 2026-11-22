@@ -219,7 +219,10 @@ _FIX_AND_FORMAT_RULES: dict[str, Callable[[Column], Column]] = {
     "affiliationTypeIds": spelling.affiliation_type,
     "address_stateOrRegion": spelling.state,
     "address_city": spelling.city,
-    "specialties": spelling.specialty,
+    "specialties": spelling.american_spelling,
+    "procedure": spelling.american_spelling,
+    "equipment": spelling.american_spelling,
+    "capability": spelling.american_spelling,
     # Formatting (#6). source_urls is never formatted: citations stay as captured.
     "address_zipOrPostcode": formatting.format_pin,
     "officialPhone": formatting.format_phone,
