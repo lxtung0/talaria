@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "6"
+# ///
 # MAGIC %md
 # MAGIC # 01 · Bronze ingest
 # MAGIC Snapshots the Virtue Foundation source tables into our own bronze tables, untouched apart from load metadata.

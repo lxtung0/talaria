@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "6"
+# ///
 # MAGIC %md
 # MAGIC # 02 · Silver base
 # MAGIC Builds the first Silver stage for facilities: objective fixes only (spec #1).
